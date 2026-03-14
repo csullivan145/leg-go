@@ -1,0 +1,22 @@
+{
+  "name": "api",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --config ../wrangler.toml",
+    "deploy": "wrangler deploy --config ../wrangler.toml",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "wrangler d1 migrations apply leg-go-db --local --config ../wrangler.toml"
+  },
+  "dependencies": {
+    "@leg-go/shared": "*",
+    "hono": "^4.7.4",
+    "drizzle-orm": "^0.39.3",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250224.0",
+    "drizzle-kit": "^0.30.4",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.69.0"
+  }
+}
