@@ -6,6 +6,17 @@ import { dbMiddleware } from './middleware/db';
 import { authMiddleware } from './middleware/auth';
 import authRoutes from './routes/auth';
 import tripRoutes from './routes/trips';
+import routeRoutes from './routes/routes';
+import legRoutes from './routes/legs';
+import accommodationRoutes from './routes/accommodation';
+import dayTripRoutes from './routes/day-trips';
+import activityRoutes from './routes/activities';
+import carRentalRoutes from './routes/car-rentals';
+import offsetRoutes from './routes/offsets';
+import shareRoutes from './routes/shares';
+import budgetRoutes from './routes/budget';
+import calendarRoutes from './routes/calendar';
+import compareRoutes from './routes/compare';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -28,6 +39,31 @@ app.route('/auth', authRoutes);
 // Protected routes
 app.use('/api/*', authMiddleware);
 app.route('/api/trips', tripRoutes);
+
+// Route CRUD (nested under trips)
+app.route('/api/trips/:id/routes', routeRoutes);
+
+// Leg CRUD + reorder
+app.route('/api', legRoutes);
+
+// Sub-resources
+app.route('/api', accommodationRoutes);
+app.route('/api', dayTripRoutes);
+app.route('/api', activityRoutes);
+app.route('/api', carRentalRoutes);
+
+// Offsets — nested GET/POST + flat PATCH/DELETE
+app.route('/api/trips', offsetRoutes);
+app.route('/api', offsetRoutes);
+
+// Shares — nested GET/POST + flat PATCH/DELETE
+app.route('/api/trips', shareRoutes);
+app.route('/api', shareRoutes);
+
+// Computed endpoints
+app.route('/api/trips', budgetRoutes);
+app.route('/api/trips', calendarRoutes);
+app.route('/api/trips', compareRoutes);
 
 // SPA fallback — MUST be last
 app.all('*', (c) => {
