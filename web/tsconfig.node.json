@@ -4,13 +4,14 @@
     "lib": ["ES2022"],
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "types": ["node"],
+
     "strict": true,
     "composite": true,
     "declaration": true,
     "outDir": "./dist-node",
     "skipLibCheck": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "types": ["node"]
   },
   "include": ["vite.config.ts"]
 }
