@@ -12,9 +12,13 @@ import {
   ChevronUp,
   Trash2,
   MapPin,
+  List,
+  CalendarDays,
+  Copy,
+  MoreHorizontal,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { format } from 'date-fns';
+import { format, parseISO, differenceInDays } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -23,17 +27,31 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { useRoute } from '@/hooks/queries/use-routes';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { DatePicker } from '@/components/ui/date-picker';
+import { useRoute, useRoutes } from '@/hooks/queries/use-routes';
+import { useOffsets } from '@/hooks/queries/use-offsets';
+import { useTrip } from '@/hooks/queries/use-trips';
+import { RouteTimeline } from '@/components/route-timeline';
 import {
   useCreateLeg,
   useUpdateLeg,
   useDeleteLeg,
   useUpsertAccommodation,
   useCreateDayTrip,
+  useUpdateDayTrip,
   useDeleteDayTrip,
   useCreateActivity,
   useDeleteActivity,
+  useCopyLeg,
 } from '@/hooks/queries/use-legs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import type { Leg, Accommodation, DayTrip, Activity, TransportType } from '@leg-go/shared';
 
@@ -53,6 +71,15 @@ const transportLabels: Record<TransportType, string> = {
   bus: 'Bus',
 };
 
+function getNights(l: { nights?: number | null; start_date?: string | null; end_date?: string | null }) {
+  if (l.nights != null && l.nights > 0) return l.nights;
+  if (l.start_date && l.end_date) {
+    const diff = differenceInDays(parseISO(l.end_date), parseISO(l.start_date));
+    return diff > 0 ? diff : 0;
+  }
+  return 0;
+}
+
 interface LegWithDetails extends Leg {
   accommodation?: Accommodation | null;
   day_trips?: DayTrip[];
@@ -66,16 +93,64 @@ interface RouteDetail {
   legs: LegWithDetails[];
 }
 
+function CopyToRouteMenu({
+  legId,
+  tripId,
+  routeId,
+  otherRoutes,
+}: {
+  legId: string;
+  tripId: string;
+  routeId: string;
+  otherRoutes: { id: string; name: string }[];
+}) {
+  const copyLeg = useCopyLeg(tripId, routeId);
+
+  if (otherRoutes.length === 0) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" title="Copy to route">
+          <Copy className="h-3.5 w-3.5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {otherRoutes.map((r) => (
+          <DropdownMenuItem
+            key={r.id}
+            onClick={() => copyLeg.mutate({ legId, targetRouteIds: [r.id] })}
+          >
+            Copy to {r.name}
+          </DropdownMenuItem>
+        ))}
+        {otherRoutes.length > 1 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => copyLeg.mutate({ legId, targetRouteIds: otherRoutes.map((r) => r.id) })}
+            >
+              Copy to all routes
+            </DropdownMenuItem>
+          </>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TravelLegCard({
   leg,
   tripId,
   routeId,
   index,
+  otherRoutes,
 }: {
   leg: LegWithDetails;
   tripId: string;
   routeId: string;
   index: number;
+  otherRoutes: { id: string; name: string }[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const updateLeg = useUpdateLeg(tripId, routeId);
@@ -89,6 +164,8 @@ function TravelLegCard({
       stops: leg.stops ?? '',
       company: leg.company ?? '',
       booking_id: leg.booking_id ?? '',
+      start_date: leg.start_date ?? '',
+      end_date: leg.end_date ?? '',
       departure_time: leg.departure_time ?? '',
       arrival_time: leg.arrival_time ?? '',
       departure_location: leg.departure_location ?? '',
@@ -101,7 +178,14 @@ function TravelLegCard({
   const Icon = transportIcons[transportType] ?? Plane;
 
   const onSubmit = async (values: Record<string, unknown>) => {
-    await updateLeg.mutateAsync({ legId: leg.id, ...values } as never);
+    await updateLeg.mutateAsync({
+      legId: leg.id,
+      ...values,
+      cost: values.cost ? Number(values.cost) : null,
+      stops: values.stops ? Number(values.stops) : null,
+      start_date: values.start_date || null,
+      end_date: values.end_date || null,
+    } as never);
     setExpanded(false);
   };
 
@@ -147,7 +231,27 @@ function TravelLegCard({
                 </div>
                 <div>
                   <Label className="text-xs">Cost ($) *</Label>
-                  <Input className="h-8 text-sm" type="number" {...register('cost')} />
+                  <Input className="h-8 text-sm" type="number" step="0.01" {...register('cost')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Departure Date</Label>
+                  <Input className="h-8 text-sm" type="date" {...register('start_date')} />
+                </div>
+                <div>
+                  <Label className="text-xs">Arrival Date</Label>
+                  <Input className="h-8 text-sm" type="date" {...register('end_date')} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Departure Time</Label>
+                  <Input className="h-8 text-sm" type="time" {...register('departure_time')} />
+                </div>
+                <div>
+                  <Label className="text-xs">Arrival Time</Label>
+                  <Input className="h-8 text-sm" type="time" {...register('arrival_time')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -168,16 +272,6 @@ function TravelLegCard({
                 <div>
                   <Label className="text-xs">Booking ID</Label>
                   <Input className="h-8 text-sm" placeholder="FQ45NXCM8" {...register('booking_id')} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Departure time</Label>
-                  <Input className="h-8 text-sm" type="time" {...register('departure_time')} />
-                </div>
-                <div>
-                  <Label className="text-xs">Arrival time</Label>
-                  <Input className="h-8 text-sm" type="time" {...register('arrival_time')} />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -204,6 +298,7 @@ function TravelLegCard({
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
+                <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
                 <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(false)}>
                   Cancel
                 </Button>
@@ -224,13 +319,17 @@ function LocationLegCard({
   tripId,
   routeId,
   index,
+  defaultExpanded = false,
+  otherRoutes,
 }: {
   leg: LegWithDetails;
   tripId: string;
   routeId: string;
   index: number;
+  defaultExpanded?: boolean;
+  otherRoutes: { id: string; name: string }[];
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(defaultExpanded);
   const updateLeg = useUpdateLeg(tripId, routeId);
   const deleteLeg = useDeleteLeg(tripId, routeId);
   const upsertAccommodation = useUpsertAccommodation(tripId, routeId);
@@ -278,10 +377,20 @@ function LocationLegCard({
     if (am.washer) amenities.push('washer');
     if (am.kitchen) amenities.push('kitchen');
     if (am.parking) amenities.push('parking');
+    const cpn = values.cost_per_night as number;
+    const tc = values.total_cost as number;
+    const costPerNight = typeof cpn === 'number' && !isNaN(cpn) ? cpn : null;
+    const totalCost = typeof tc === 'number' && !isNaN(tc) ? tc : null;
     await upsertAccommodation.mutateAsync({
       legId: leg.id,
-      ...values,
+      name: values.name || null,
+      address: values.address || null,
+      cost_per_night: costPerNight,
+      total_cost: totalCost,
+      check_in_time: values.check_in_time || null,
+      check_out_time: values.check_out_time || null,
       amenities,
+      notes: values.notes || null,
     } as never);
   };
 
@@ -301,8 +410,8 @@ function LocationLegCard({
                 <CardTitle className="text-base">{leg.name || 'Unnamed Location'}</CardTitle>
                 {leg.start_date && leg.end_date && (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {format(new Date(leg.start_date), 'MMM d')} –{' '}
-                    {format(new Date(leg.end_date), 'MMM d, yyyy')}
+                    {format(parseISO(leg.start_date), 'MMM d')} –{' '}
+                    {format(parseISO(leg.end_date), 'MMM d, yyyy')}
                     {leg.nights != null && ` · ${leg.nights} nights`}
                   </p>
                 )}
@@ -313,15 +422,27 @@ function LocationLegCard({
             </div>
           </CardHeader>
 
-          {leg.accommodation && !expanded && (
-            <CardContent className="pt-0">
-              <p className="text-xs text-muted-foreground">
-                🏠 {leg.accommodation.name}
-                {leg.accommodation.total_cost != null &&
-                  ` · $${leg.accommodation.total_cost.toLocaleString()}`}
-              </p>
-            </CardContent>
-          )}
+          {leg.accommodation && !expanded && (() => {
+            const acc = leg.accommodation!;
+            const nights = getNights(leg);
+            const nightly = acc.cost_per_night ?? (acc.total_cost != null && nights > 0 ? acc.total_cost / nights : null);
+            const total = acc.total_cost ?? (acc.cost_per_night != null && nights > 0 ? acc.cost_per_night * nights : null);
+            let costLine = '';
+            if (nightly != null && total != null) {
+              costLine = ` · $${nightly.toLocaleString(undefined, { maximumFractionDigits: 2 })}/night ($${total.toLocaleString(undefined, { maximumFractionDigits: 2 })} total)`;
+            } else if (nightly != null) {
+              costLine = ` · $${nightly.toLocaleString(undefined, { maximumFractionDigits: 2 })}/night`;
+            } else if (total != null) {
+              costLine = ` · $${total.toLocaleString(undefined, { maximumFractionDigits: 2 })} total`;
+            }
+            return (
+              <CardContent className="pt-0">
+                <p className="text-xs text-muted-foreground">
+                  🏠 {acc.name}{costLine}
+                </p>
+              </CardContent>
+            );
+          })()}
 
           {expanded && (
             <CardContent className="pt-0 space-y-4">
@@ -337,11 +458,17 @@ function LocationLegCard({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Start Date</Label>
-                    <Input className="h-8 text-sm" type="date" {...legForm.register('start_date')} />
+                    <DatePicker
+                      value={legForm.watch('start_date')}
+                      onChange={(date) => legForm.setValue('start_date', date)}
+                    />
                   </div>
                   <div>
                     <Label className="text-xs">End Date</Label>
-                    <Input className="h-8 text-sm" type="date" {...legForm.register('end_date')} />
+                    <DatePicker
+                      value={legForm.watch('end_date')}
+                      onChange={(date) => legForm.setValue('end_date', date)}
+                    />
                   </div>
                 </div>
                 <div>
@@ -349,16 +476,19 @@ function LocationLegCard({
                   <Textarea className="text-sm min-h-0 h-14" {...legForm.register('notes')} />
                 </div>
                 <div className="flex justify-between items-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-destructive"
-                    onClick={() => deleteLeg.mutate(leg.id)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Remove
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-destructive"
+                      onClick={() => deleteLeg.mutate(leg.id)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5 mr-1" />
+                      Remove
+                    </Button>
+                    <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
+                  </div>
                   <Button type="submit" size="sm" disabled={updateLeg.isPending}>
                     Save Location
                   </Button>
@@ -384,11 +514,11 @@ function LocationLegCard({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">$/night</Label>
-                      <Input className="h-8 text-sm" type="number" {...accForm.register('cost_per_night')} />
+                      <Input className="h-8 text-sm" type="number" step="0.01" {...accForm.register('cost_per_night', { valueAsNumber: true })} />
                     </div>
                     <div>
                       <Label className="text-xs">Total cost</Label>
-                      <Input className="h-8 text-sm" type="number" {...accForm.register('total_cost')} />
+                      <Input className="h-8 text-sm" type="number" step="0.01" {...accForm.register('total_cost', { valueAsNumber: true })} />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -432,7 +562,7 @@ function LocationLegCard({
                   <div key={dt.id} className="flex items-center justify-between text-sm py-1 border-b">
                     <span>
                       {dt.destination_name}
-                      {dt.date && ` · ${format(new Date(dt.date), 'MMM d')}`}
+                      {dt.date && ` · ${format(parseISO(dt.date), 'MMM d')}`}
                     </span>
                     <div className="flex items-center gap-2">
                       <Badge
@@ -479,7 +609,7 @@ function LocationLegCard({
                   <div key={act.id} className="flex items-center justify-between text-sm py-1 border-b">
                     <span>
                       {act.name}
-                      {act.date && ` · ${format(new Date(act.date), 'MMM d')}`}
+                      {act.date && ` · ${format(parseISO(act.date), 'MMM d')}`}
                       {act.time && ` at ${act.time}`}
                     </span>
                     <Button
@@ -517,10 +647,29 @@ function LocationLegCard({
 export default function RouteEditorPage() {
   const { tripId, routeId } = useParams<{ tripId: string; routeId: string }>();
   const { data: route, isLoading } = useRoute(tripId!, routeId!) as { data: RouteDetail | undefined; isLoading: boolean };
+  const { data: trip } = useTrip(tripId!);
+  const { data: allRoutes } = useRoutes(tripId!);
+  const { data: offsets } = useOffsets(tripId!);
   const createLeg = useCreateLeg(tripId!, routeId!);
+  const updateLeg = useUpdateLeg(tripId!, routeId!);
+  const updateDayTrip = useUpdateDayTrip(tripId!, routeId!);
+  const otherRoutes = (allRoutes ?? []).filter((r: { id: string }) => r.id !== routeId).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }));
+  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
+  const [selectedLegId, setSelectedLegId] = useState<string | null>(null);
+  const [addLocationOpen, setAddLocationOpen] = useState(false);
+  const addLocationForm = useForm({
+    defaultValues: { name: '', start_date: '', end_date: '' },
+  });
 
-  const addLocation = async () => {
-    await createLeg.mutateAsync({ type: 'location' } as never);
+  const onAddLocation = async (values: { name: string; start_date: string; end_date: string }) => {
+    await createLeg.mutateAsync({
+      type: 'location',
+      name: values.name,
+      start_date: values.start_date || null,
+      end_date: values.end_date || null,
+    } as never);
+    setAddLocationOpen(false);
+    addLocationForm.reset();
   };
 
   if (isLoading)
@@ -534,74 +683,253 @@ export default function RouteEditorPage() {
 
   const legs = route.legs ?? [];
   const locationLegs = legs.filter((l) => l.type === 'location');
-  const totalCost = legs.reduce((s, l) => s + (l.cost ?? 0), 0);
   const transportCost = legs.filter((l) => l.type === 'travel').reduce((s, l) => s + (l.cost ?? 0), 0);
-  const accCost = locationLegs.reduce((s, l) => s + (l.accommodation?.total_cost ?? 0), 0);
+
+  const getAccCost = (l: LegWithDetails) => {
+    if (l.accommodation?.total_cost != null) return l.accommodation.total_cost;
+    const nights = getNights(l);
+    if (l.accommodation?.cost_per_night != null && nights > 0) {
+      return l.accommodation.cost_per_night * nights;
+    }
+    return 0;
+  };
+  const accCost = locationLegs.reduce((s, l) => s + getAccCost(l), 0);
+  const totalCost = transportCost + accCost;
 
   let locationIndex = 0;
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-6">
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
-          <Link to={`/trips/${tripId}/routes`}>
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            Routes
-          </Link>
-        </Button>
-        <h1 className="text-xl font-bold">{route.name}</h1>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" asChild className="-ml-2">
+            <Link to={`/trips/${tripId}/routes`}>
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Routes
+            </Link>
+          </Button>
+          <h1 className="text-xl font-bold">{route.name}</h1>
+        </div>
+        <div className="flex items-center gap-1 border rounded-lg p-0.5">
+          <Button
+            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => setViewMode('list')}
+          >
+            <List className="h-4 w-4" />
+          </Button>
+          <Button
+            variant={viewMode === 'timeline' ? 'secondary' : 'ghost'}
+            size="sm"
+            className="h-7 px-2"
+            onClick={() => setViewMode('timeline')}
+          >
+            <CalendarDays className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
 
-      {legs.length === 0 ? (
-        <div className="text-center py-12 text-muted-foreground">
-          <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p>No locations yet. Add your first stop.</p>
+      {viewMode === 'timeline' && trip?.start_date && trip?.end_date ? (
+        <div className="mb-6">
+          <RouteTimeline
+            legs={legs}
+            tripStartDate={trip.start_date}
+            tripEndDate={trip.end_date}
+            onUpdateLeg={async (legId, startDate, endDate) => {
+              await updateLeg.mutateAsync({ legId, start_date: startDate, end_date: endDate } as never);
+            }}
+            onUpdateDayTrip={async (dayTripId, date) => {
+              await updateDayTrip.mutateAsync({ dayTripId, date } as never);
+            }}
+            onSelectLeg={(legId) => setSelectedLegId(legId)}
+          />
         </div>
-      ) : (
-        <div className="relative">
-          {legs.map((leg) => {
-            if (leg.type === 'location') {
-              const idx = locationIndex++;
-              return (
-                <LocationLegCard key={leg.id} leg={leg} tripId={tripId!} routeId={routeId!} index={idx} />
-              );
-            } else {
-              return (
-                <TravelLegCard key={leg.id} leg={leg} tripId={tripId!} routeId={routeId!} index={0} />
-              );
-            }
-          })}
+      ) : viewMode === 'timeline' ? (
+        <div className="text-center py-12 text-muted-foreground mb-6">
+          <p>Set trip start and end dates to use the timeline view.</p>
         </div>
+      ) : null}
+
+      {viewMode === 'list' && (
+        <>
+          {legs.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p>No locations yet. Add your first stop.</p>
+            </div>
+          ) : (
+            <div className="relative">
+              {(() => {
+                const sorted = [...legs].sort((a, b) => a.order - b.order);
+                const elements: React.ReactNode[] = [];
+                let locationIndex = 0;
+
+                const addPlaceholder = (key: string, label: string, insertOrder: number, startDate?: string | null, endDate?: string | null) => {
+                  elements.push(
+                    <div key={key} className="relative flex justify-center my-1">
+                      <button
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-dashed border-muted-foreground/40 bg-muted/20 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                        onClick={async () => {
+                          await createLeg.mutateAsync({
+                            type: 'travel',
+                            name: label,
+                            order: insertOrder,
+                            start_date: startDate ?? null,
+                            end_date: endDate ?? null,
+                          } as never);
+                        }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add transport: {label}
+                      </button>
+                    </div>,
+                  );
+                };
+
+                // Home → first location placeholder (if first leg is a location)
+                if (sorted.length > 0 && sorted[0].type === 'location') {
+                  const first = sorted[0];
+                  addPlaceholder('travel-to-first', `Home → ${first.name}`, first.order, null, first.start_date);
+                }
+
+                sorted.forEach((leg, i) => {
+                  // Check if we need a placeholder between previous location and this location
+                  if (leg.type === 'location' && i > 0 && sorted[i - 1].type === 'location') {
+                    const prev = sorted[i - 1];
+                    addPlaceholder(`travel-gap-${i}`, `${prev.name} → ${leg.name}`, leg.order, prev.end_date, leg.start_date);
+                  }
+
+                  if (leg.type === 'travel') {
+                    elements.push(
+                      <TravelLegCard key={leg.id} leg={leg} tripId={tripId!} routeId={routeId!} index={i} otherRoutes={otherRoutes} />,
+                    );
+                  } else {
+                    elements.push(
+                      <LocationLegCard key={`${leg.id}-${leg.accommodation?.total_cost ?? ''}-${leg.accommodation?.cost_per_night ?? ''}`} leg={leg} tripId={tripId!} routeId={routeId!} index={locationIndex++} otherRoutes={otherRoutes} />,
+                    );
+                  }
+                });
+
+                // Last location → Home placeholder (if last leg is a location)
+                if (sorted.length > 0 && sorted[sorted.length - 1].type === 'location') {
+                  const last = sorted[sorted.length - 1];
+                  addPlaceholder('travel-from-last', `${last.name} → Home`, last.order + 1, last.end_date, null);
+                }
+
+                return elements;
+              })()}
+            </div>
+          )}
+
+          {legs.length > 0 && (() => {
+            const totalOffset = (offsets ?? []).reduce((sum, o) => sum + o.amount, 0);
+            const outOfPocket = totalCost - totalOffset;
+            return (
+              <Card className="mt-6">
+                <CardContent className="pt-4">
+                  <h3 className="text-sm font-semibold mb-3">Running Totals</h3>
+                  <div className="grid grid-cols-3 gap-4 text-sm">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Transport</p>
+                      <p className="font-bold">${transportCost.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Accommodation</p>
+                      <p className="font-bold">${accCost.toLocaleString()}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground text-xs">Route Total</p>
+                      <p className="font-bold">${totalCost.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  {totalOffset > 0 && (
+                    <div className="grid grid-cols-3 gap-4 text-sm mt-3 pt-3 border-t">
+                      <div>
+                        <p className="text-muted-foreground text-xs">Offset</p>
+                        <p className="font-bold text-green-600">-${totalOffset.toLocaleString()}</p>
+                      </div>
+                      <div />
+                      <div>
+                        <p className="text-muted-foreground text-xs">Out of Pocket</p>
+                        <p className="font-bold text-lg">${outOfPocket.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })()}
+        </>
       )}
 
       <div className="mt-4">
-        <Button onClick={addLocation} variant="outline" className="w-full" disabled={createLeg.isPending}>
+        <Button onClick={() => setAddLocationOpen(true)} variant="outline" className="w-full">
           <Plus className="h-4 w-4 mr-2" />
           Add Location
         </Button>
+        <Dialog open={addLocationOpen} onOpenChange={setAddLocationOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add Location</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={addLocationForm.handleSubmit(onAddLocation)} className="space-y-4">
+              <div>
+                <Label htmlFor="loc-name">Location Name</Label>
+                <Input
+                  id="loc-name"
+                  placeholder="e.g. Lisbon, Porto, Sardinia"
+                  {...addLocationForm.register('name', { required: true })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Start Date</Label>
+                  <DatePicker
+                    value={addLocationForm.watch('start_date')}
+                    onChange={(date) => addLocationForm.setValue('start_date', date)}
+                  />
+                </div>
+                <div>
+                  <Label>End Date</Label>
+                  <DatePicker
+                    value={addLocationForm.watch('end_date')}
+                    onChange={(date) => addLocationForm.setValue('end_date', date)}
+                  />
+                </div>
+              </div>
+              <Button type="submit" className="w-full" disabled={createLeg.isPending}>
+                {createLeg.isPending ? 'Adding...' : 'Add Location'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {legs.length > 0 && (
-        <Card className="mt-6">
-          <CardContent className="pt-4">
-            <h3 className="text-sm font-semibold mb-3">Running Totals</h3>
-            <div className="grid grid-cols-3 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground text-xs">Transport</p>
-                <p className="font-bold">${transportCost.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Accommodation</p>
-                <p className="font-bold">${accCost.toLocaleString()}</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">Route Total</p>
-                <p className="font-bold text-lg">${totalCost.toLocaleString()}</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Leg detail dialog (from calendar double-click) */}
+      {selectedLegId && (() => {
+        const selectedLeg = legs.find((l) => l.id === selectedLegId) as LegWithDetails | undefined;
+        if (!selectedLeg || selectedLeg.type !== 'location') return null;
+        const idx = locationLegs.indexOf(selectedLeg);
+        return (
+          <Dialog open={true} onOpenChange={(open) => { if (!open) setSelectedLegId(null); }}>
+            <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>{selectedLeg.name || 'Unnamed Location'}</DialogTitle>
+              </DialogHeader>
+              <LocationLegCard
+                key={`dialog-${selectedLeg.id}-${selectedLeg.accommodation?.total_cost ?? ''}`}
+                leg={selectedLeg}
+                tripId={tripId!}
+                routeId={routeId!}
+                index={idx >= 0 ? idx : 0}
+                defaultExpanded
+                otherRoutes={otherRoutes}
+              />
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
     </div>
   );
 }

@@ -13,12 +13,12 @@ database_name = "leg-go-db"
 database_id = "04d58397-6904-48e5-986f-21adaebf7d4f"
 migrations_dir = "api/drizzle/migrations"
 
-[[r2_buckets]]
-binding = "RECEIPTS"
-bucket_name = "leg-go-files"
+# [[r2_buckets]]
+# binding = "RECEIPTS"
+# bucket_name = "leg-go-files"
 
-[ai]
-binding = "AI"
+# [ai]
+# binding = "AI"
 
 [vars]
-FRONTEND_URL = "http://localhost:5173"
+FRONTEND_URL = "https://leg-go.csullivan.workers.dev"

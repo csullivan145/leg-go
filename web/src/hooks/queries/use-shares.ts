@@ -13,7 +13,7 @@ const shareKeys = {
 export function useShares(tripId: string) {
   return useQuery({
     queryKey: shareKeys.all(tripId),
-    queryFn: () => api.get<ShareWithUser[]>(`/api/trips/${tripId}/shares`),
+    queryFn: () => api.get<{ shares: ShareWithUser[] }>(`/api/trips/${tripId}/shares`).then((r) => r.shares),
     enabled: !!tripId,
   });
 }

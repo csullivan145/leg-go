@@ -10,7 +10,7 @@ export const routeKeys = {
 export function useRoutes(tripId: string) {
   return useQuery({
     queryKey: routeKeys.all(tripId),
-    queryFn: () => api.get<Route[]>(`/api/trips/${tripId}/routes`),
+    queryFn: () => api.get<{ routes: Route[] }>(`/api/trips/${tripId}/routes`).then((r) => r.routes),
     enabled: !!tripId,
   });
 }
@@ -18,7 +18,7 @@ export function useRoutes(tripId: string) {
 export function useRoute(tripId: string, routeId: string) {
   return useQuery({
     queryKey: routeKeys.detail(tripId, routeId),
-    queryFn: () => api.get<Route & { legs: unknown[] }>(`/api/trips/${tripId}/routes/${routeId}`),
+    queryFn: () => api.get<{ route: Route & { legs: unknown[] } }>(`/api/trips/${tripId}/routes/${routeId}`).then((r) => r.route),
     enabled: !!tripId && !!routeId,
   });
 }

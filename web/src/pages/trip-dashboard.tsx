@@ -1,6 +1,6 @@
 import { Link, useParams } from 'react-router';
 import { Map, Calendar, DollarSign, Users, ArrowLeft } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -76,9 +76,9 @@ export default function TripDashboardPage() {
             <h1 className="text-2xl font-bold">{trip.name}</h1>
             {(trip.start_date || trip.end_date) && (
               <p className="text-muted-foreground mt-1 text-sm">
-                {trip.start_date ? format(new Date(trip.start_date), 'MMM d, yyyy') : '?'}
+                {trip.start_date ? format(parseISO(trip.start_date), 'MMM d, yyyy') : '?'}
                 {' — '}
-                {trip.end_date ? format(new Date(trip.end_date), 'MMM d, yyyy') : '?'}
+                {trip.end_date ? format(parseISO(trip.end_date), 'MMM d, yyyy') : '?'}
               </p>
             )}
           </div>

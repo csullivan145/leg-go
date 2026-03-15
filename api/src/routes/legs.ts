@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { eq, and, asc } from 'drizzle-orm';
-import { legs, routes } from '../db/schema';
+import { legs, routes, accommodations, dayTrips, activities, carRentals } from '../db/schema';
 import { createLegSchema, updateLegSchema } from '@leg-go/shared';
 import { generateId } from '../lib/utils';
 import { requireTripAccess } from '../middleware/trip-access';
@@ -44,9 +44,21 @@ legRoutes.post('/routes/:routeId/legs', requireTripAccess('editor'), async (c) =
     .get();
   if (!route) return c.json({ error: 'Route not found' }, 404);
 
-  // Get current max order
+  // Get current legs and determine order
   const existingLegs = await db.select().from(legs).where(eq(legs.route_id, routeId));
   const maxOrder = existingLegs.reduce((max, l) => Math.max(max, l.order), -1);
+
+  let insertOrder: number;
+  if (body.order != null) {
+    insertOrder = body.order;
+    // Shift existing legs at or after this order up by 1
+    const toShift = existingLegs.filter((l) => l.order >= insertOrder);
+    await Promise.all(
+      toShift.map((l) => db.update(legs).set({ order: l.order + 1 }).where(eq(legs.id, l.id))),
+    );
+  } else {
+    insertOrder = maxOrder + 1;
+  }
 
   const nights = body.type === 'location'
     ? calcNights(body.start_date ?? null, body.end_date ?? null)
@@ -55,7 +67,7 @@ legRoutes.post('/routes/:routeId/legs', requireTripAccess('editor'), async (c) =
   const leg = {
     id: generateId(),
     route_id: routeId,
-    order: maxOrder + 1,
+    order: insertOrder,
     nights,
     name: body.name ?? null,
     start_date: body.start_date ?? null,
@@ -163,6 +175,99 @@ legRoutes.post('/legs/:legId/reorder', requireTripAccess('editor'), async (c) =>
     .orderBy(asc(legs.order));
 
   return c.json({ legs: updatedLegs });
+});
+
+// POST /legs/:legId/copy — copy leg to another route (editor+)
+legRoutes.post('/legs/:legId/copy', requireTripAccess('editor'), async (c) => {
+  const db = c.get('db');
+  const trip = c.get('trip');
+  const { legId } = c.req.param();
+  const { targetRouteIds } = await c.req.json<{ targetRouteIds: string[] }>();
+
+  const leg = await db.select().from(legs).where(eq(legs.id, legId)).get();
+  if (!leg) return c.json({ error: 'Leg not found' }, 404);
+
+  const sourceRoute = await db.select().from(routes)
+    .where(and(eq(routes.id, leg.route_id), eq(routes.trip_id, trip.id)))
+    .get();
+  if (!sourceRoute) return c.json({ error: 'Access denied' }, 403);
+
+  // Get sub-resources for this leg
+  const [accomList, dayTripList, activityList, carRentalList] = await Promise.all([
+    db.select().from(accommodations).where(eq(accommodations.leg_id, legId)),
+    db.select().from(dayTrips).where(eq(dayTrips.leg_id, legId)),
+    db.select().from(activities).where(eq(activities.leg_id, legId)),
+    db.select().from(carRentals).where(eq(carRentals.leg_id, legId)),
+  ]);
+
+  const copied: string[] = [];
+
+  for (const targetRouteId of targetRouteIds) {
+    // Verify target route belongs to same trip
+    const targetRoute = await db.select().from(routes)
+      .where(and(eq(routes.id, targetRouteId), eq(routes.trip_id, trip.id)))
+      .get();
+    if (!targetRoute) continue;
+
+    // Get target legs sorted by order
+    const targetLegs = await db.select().from(legs).where(eq(legs.route_id, targetRouteId));
+    targetLegs.sort((a, b) => a.order - b.order);
+
+    // Determine insertion position based on dates
+    let insertOrder: number;
+    if (leg.start_date) {
+      // Find the right position: after the location whose end_date <= travel start_date
+      const insertIdx = targetLegs.findIndex((tl) => {
+        if (tl.type !== 'location') return false;
+        if (!tl.start_date) return false;
+        return tl.start_date > leg.start_date!;
+      });
+      if (insertIdx === -1) {
+        insertOrder = (targetLegs.length > 0 ? targetLegs[targetLegs.length - 1].order + 1 : 0);
+      } else {
+        insertOrder = targetLegs[insertIdx].order;
+      }
+    } else {
+      insertOrder = (targetLegs.length > 0 ? targetLegs[targetLegs.length - 1].order + 1 : 0);
+    }
+
+    // Shift legs at or after insert position
+    const toShift = targetLegs.filter((l) => l.order >= insertOrder);
+    await Promise.all(
+      toShift.map((l) => db.update(legs).set({ order: l.order + 1 }).where(eq(legs.id, l.id))),
+    );
+
+    const newLegId = generateId();
+    const { id: _id, route_id: _rid, order: _ord, ...legData } = leg;
+    await db.insert(legs).values({
+      ...legData,
+      id: newLegId,
+      route_id: targetRouteId,
+      order: insertOrder,
+    });
+
+    // Copy sub-resources
+    for (const a of accomList) {
+      const { id: _aid, leg_id: _alid, ...aData } = a;
+      await db.insert(accommodations).values({ ...aData, id: generateId(), leg_id: newLegId });
+    }
+    for (const dt of dayTripList) {
+      const { id: _did, leg_id: _dlid, ...dtData } = dt;
+      await db.insert(dayTrips).values({ ...dtData, id: generateId(), leg_id: newLegId });
+    }
+    for (const act of activityList) {
+      const { id: _actid, leg_id: _alid, ...actData } = act;
+      await db.insert(activities).values({ ...actData, id: generateId(), leg_id: newLegId });
+    }
+    for (const cr of carRentalList) {
+      const { id: _crid, leg_id: _clid, ...crData } = cr;
+      await db.insert(carRentals).values({ ...crData, id: generateId(), leg_id: newLegId });
+    }
+
+    copied.push(targetRouteId);
+  }
+
+  return c.json({ ok: true, copiedTo: copied });
 });
 
 export default legRoutes;

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
-import { routes, legs } from '../db/schema';
+import { routes, legs, accommodations, dayTrips, activities, carRentals } from '../db/schema';
 import { createRouteSchema, updateRouteSchema } from '@leg-go/shared';
 import { generateId } from '../lib/utils';
 import { requireTripAccess } from '../middleware/trip-access';
@@ -69,8 +69,28 @@ routeRoutes.get('/:routeId', async (c) => {
   if (!route) return c.json({ error: 'Route not found' }, 404);
 
   const legList = await db.select().from(legs).where(eq(legs.route_id, route.id));
+  legList.sort((a, b) => a.order - b.order);
 
-  return c.json({ route: { ...route, legs: legList } });
+  const legsWithDetails = await Promise.all(
+    legList.map(async (leg) => {
+      if (leg.type !== 'location') return leg;
+      const [accom, dayTripList, activityList, carRentalList] = await Promise.all([
+        db.select().from(accommodations).where(eq(accommodations.leg_id, leg.id)).get(),
+        db.select().from(dayTrips).where(eq(dayTrips.leg_id, leg.id)),
+        db.select().from(activities).where(eq(activities.leg_id, leg.id)),
+        db.select().from(carRentals).where(eq(carRentals.leg_id, leg.id)),
+      ]);
+      return {
+        ...leg,
+        accommodation: accom ?? null,
+        day_trips: dayTripList,
+        activities: activityList,
+        car_rentals: carRentalList,
+      };
+    }),
+  );
+
+  return c.json({ route: { ...route, legs: legsWithDetails } });
 });
 
 // Update route, handle winner promotion (editor+)

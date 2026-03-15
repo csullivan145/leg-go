@@ -42,6 +42,19 @@ export function useReorderLeg(tripId: string, routeId: string) {
   });
 }
 
+// Copy leg to other routes
+export function useCopyLeg(tripId: string, routeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ legId, targetRouteIds }: { legId: string; targetRouteIds: string[] }) =>
+      api.post(`/api/legs/${legId}/copy`, { targetRouteIds }),
+    onSuccess: () => {
+      // Invalidate all routes for this trip
+      qc.invalidateQueries({ queryKey: routeKeys.all(tripId) });
+    },
+  });
+}
+
 // Accommodation
 export function useUpsertAccommodation(tripId: string, routeId: string) {
   const qc = useQueryClient();

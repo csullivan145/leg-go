@@ -18,7 +18,6 @@ budgetRoutes.get('/:id/budget', requireTripAccess('viewer'), async (c) => {
   const db = c.get('db');
   const trip = c.get('trip');
 
-  // Get the winner route, or fall back to the first route
   const routeList = await db.select().from(routes)
     .where(eq(routes.trip_id, trip.id));
 
@@ -30,11 +29,16 @@ budgetRoutes.get('/:id/budget', requireTripAccess('viewer'), async (c) => {
         outOfPocket: 0,
         byCategory: { flights: 0, inRegionTransport: 0, accommodation: 0, carRental: 0, activities: 0 },
         byLocation: [],
+        routes: [],
       },
     });
   }
 
-  const winnerRoute = routeList.find((r) => r.status === 'winner') ?? routeList[0];
+  // Use selected route, winner, or first route
+  const selectedRouteId = c.req.query('routeId');
+  const winnerRoute = (selectedRouteId ? routeList.find((r) => r.id === selectedRouteId) : null)
+    ?? routeList.find((r) => r.status === 'winner')
+    ?? routeList[0];
 
   // Get all legs for this route ordered
   const legList = await db.select().from(legs)
@@ -50,12 +54,15 @@ budgetRoutes.get('/:id/budget', requireTripAccess('viewer'), async (c) => {
   const travelLegs = legList.filter((l) => l.type === 'travel');
   const locationLegs = legList.filter((l) => l.type === 'location');
 
-  // Flights = first and last travel leg (if flight type), otherwise all flight transport
-  const flightLegs = travelLegs.filter((l) => l.transport_type === 'flight');
-  const flightCost = flightLegs.reduce((sum, l) => sum + (l.cost ?? 0), 0);
+  // First and last travel legs are "flights from home"
+  const firstTravel = travelLegs.length > 0 ? travelLegs[0] : null;
+  const lastTravel = travelLegs.length > 1 ? travelLegs[travelLegs.length - 1] : null;
+  const homeFlights = [firstTravel, lastTravel].filter(Boolean) as typeof travelLegs;
+  const homeFlightIds = new Set(homeFlights.map((l) => l.id));
+  const flightCost = homeFlights.reduce((sum, l) => sum + (l.cost ?? 0), 0);
 
-  // In-region transport = non-flight travel legs
-  const inRegionLegs = travelLegs.filter((l) => l.transport_type !== 'flight');
+  // Everything else is in-region transport
+  const inRegionLegs = travelLegs.filter((l) => !homeFlightIds.has(l.id));
   const inRegionCost = inRegionLegs.reduce((sum, l) => sum + (l.cost ?? 0), 0);
 
   // Get sub-resources for all location legs
@@ -81,7 +88,19 @@ budgetRoutes.get('/:id/budget', requireTripAccess('viewer'), async (c) => {
       db.select().from(dayTrips).where(eq(dayTrips.leg_id, locationLeg.id)),
     ]);
 
-    const accomCost = accomList.reduce((sum, a) => sum + (a.total_cost ?? 0), 0);
+    let nights = locationLeg.nights ?? 0;
+    if (nights <= 0 && locationLeg.start_date && locationLeg.end_date) {
+      const start = new Date(locationLeg.start_date);
+      const end = new Date(locationLeg.end_date);
+      const diff = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+      if (diff > 0) nights = diff;
+    }
+
+    const accomCost = accomList.reduce((sum, a) => {
+      if (a.total_cost != null) return sum + a.total_cost;
+      if (a.cost_per_night != null && nights > 0) return sum + a.cost_per_night * nights;
+      return sum;
+    }, 0);
     const carCost = carList.reduce((sum, cr) => sum + (cr.cost ?? 0), 0);
     const dayTripCost = dayTripList.reduce((sum, dt) => sum + (dt.cost ?? 0), 0);
 
@@ -92,9 +111,10 @@ budgetRoutes.get('/:id/budget', requireTripAccess('viewer'), async (c) => {
     byLocation.push({
       legId: locationLeg.id,
       name: locationLeg.name,
+      nights,
       accommodation: accomCost,
       carRental: carCost,
-      activities: 0, // activities table doesn't have cost, only dayTrips do
+      activities: 0,
       dayTrips: dayTripCost,
       total: accomCost + carCost + dayTripCost,
     });
@@ -117,6 +137,7 @@ budgetRoutes.get('/:id/budget', requireTripAccess('viewer'), async (c) => {
       },
       byLocation,
       route: { id: winnerRoute.id, name: winnerRoute.name, status: winnerRoute.status },
+      routes: routeList.map((r) => ({ id: r.id, name: r.name, status: r.status })),
     },
   });
 });

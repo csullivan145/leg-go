@@ -10,14 +10,14 @@ export const tripKeys = {
 export function useTrips() {
   return useQuery({
     queryKey: tripKeys.all,
-    queryFn: () => api.get<Trip[]>('/api/trips'),
+    queryFn: () => api.get<{ trips: Trip[] }>('/api/trips').then((r) => r.trips),
   });
 }
 
 export function useTrip(id: string) {
   return useQuery({
     queryKey: tripKeys.detail(id),
-    queryFn: () => api.get<Trip>(`/api/trips/${id}`),
+    queryFn: () => api.get<{ trip: Trip; routes: unknown[]; role: string }>(`/api/trips/${id}`).then((r) => ({ ...r.trip, routes: r.routes, role: r.role })),
     enabled: !!id,
   });
 }

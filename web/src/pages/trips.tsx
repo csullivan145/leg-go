@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Plus, MapPin } from 'lucide-react';
 import { useForm } from 'react-hook-form';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { DatePicker } from '@/components/ui/date-picker';
 import { useTrips, useCreateTrip } from '@/hooks/queries/use-trips';
 import { cn } from '@/lib/utils';
 
@@ -80,12 +81,18 @@ export default function TripsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input id="start_date" type="date" {...form.register('start_date')} />
+                  <Label>Start Date</Label>
+                  <DatePicker
+                    value={form.watch('start_date')}
+                    onChange={(date) => form.setValue('start_date', date)}
+                  />
                 </div>
                 <div>
-                  <Label htmlFor="end_date">End Date</Label>
-                  <Input id="end_date" type="date" {...form.register('end_date')} />
+                  <Label>End Date</Label>
+                  <DatePicker
+                    value={form.watch('end_date')}
+                    onChange={(date) => form.setValue('end_date', date)}
+                  />
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={createTrip.isPending}>
@@ -125,9 +132,9 @@ export default function TripsPage() {
                   )}
                   {(trip.start_date || trip.end_date) && (
                     <p className="text-xs text-muted-foreground">
-                      {trip.start_date ? format(new Date(trip.start_date), 'MMM d, yyyy') : '?'}
+                      {trip.start_date ? format(parseISO(trip.start_date), 'MMM d, yyyy') : '?'}
                       {' — '}
-                      {trip.end_date ? format(new Date(trip.end_date), 'MMM d, yyyy') : '?'}
+                      {trip.end_date ? format(parseISO(trip.end_date), 'MMM d, yyyy') : '?'}
                     </p>
                   )}
                 </CardContent>

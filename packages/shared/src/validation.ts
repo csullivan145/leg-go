@@ -43,6 +43,7 @@ export const createLegSchema = z.object({
   departure_location: z.string().max(200).nullable().optional(),
   arrival_location: z.string().max(200).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
+  order: z.number().int().min(0).optional(),
 });
 
 export const updateLegSchema = createLegSchema.partial().omit({ type: true });

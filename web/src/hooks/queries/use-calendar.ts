@@ -27,7 +27,7 @@ export type CalendarData = CalendarDay[];
 export function useCalendar(tripId: string) {
   return useQuery({
     queryKey: ['trips', tripId, 'calendar'],
-    queryFn: () => api.get<CalendarData>(`/api/trips/${tripId}/calendar`),
+    queryFn: () => api.get<{ calendar: CalendarData }>(`/api/trips/${tripId}/calendar`).then((r) => r.calendar),
     enabled: !!tripId,
   });
 }
