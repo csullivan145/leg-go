@@ -15,7 +15,6 @@ import {
   List,
   CalendarDays,
   Copy,
-  MoreHorizontal,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { format, parseISO, differenceInDays } from 'date-fns';
@@ -193,20 +192,22 @@ function TravelLegCard({
     <div className="relative flex justify-center my-1">
       <div
         className={cn(
-          'flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer hover:bg-accent text-sm transition-colors',
-          leg.transport_type ? 'bg-white border-border' : 'border-dashed border-muted-foreground/50 bg-muted/30',
+          'flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer text-sm transition-all',
+          leg.transport_type
+            ? 'bg-card border-border/60 hover:border-primary/30'
+            : 'border-dashed border-muted-foreground/30 bg-muted/20 hover:bg-muted/40',
         )}
         onClick={() => setExpanded(!expanded)}
       >
         <Icon className="h-3.5 w-3.5 text-muted-foreground" />
         <span className="font-medium">{leg.transport_type ? transportLabels[leg.transport_type] : 'Travel'}</span>
-        {leg.cost != null && <span className="text-muted-foreground">${leg.cost.toLocaleString()}</span>}
+        {leg.cost != null && <span className="text-muted-foreground tabular-nums">${leg.cost.toLocaleString()}</span>}
         {leg.duration && <span className="text-muted-foreground">· {leg.duration}</span>}
         {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </div>
 
       {expanded && (
-        <Card className="absolute top-full mt-2 z-10 w-full max-w-lg shadow-lg">
+        <Card className="absolute top-full mt-2 z-10 w-full max-w-lg shadow-lg border-border/60">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Edit Travel Leg</CardTitle>
           </CardHeader>
@@ -401,26 +402,24 @@ function LocationLegCard({
           <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold shrink-0">
             {index + 1}
           </div>
-          <div className="w-0.5 bg-border flex-1 min-h-4" />
+          <div className="w-px bg-border/60 flex-1 min-h-4" />
         </div>
-        <Card className="flex-1 mb-2">
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-base">{leg.name || 'Unnamed Location'}</CardTitle>
-                {leg.start_date && leg.end_date && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {format(parseISO(leg.start_date), 'MMM d')} –{' '}
-                    {format(parseISO(leg.end_date), 'MMM d, yyyy')}
-                    {leg.nights != null && ` · ${leg.nights} nights`}
-                  </p>
-                )}
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)}>
-                {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </Button>
+        <div className="flex-1 mb-2 py-3 px-4 rounded-xl border border-border/60 bg-card">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-semibold">{leg.name || 'Unnamed Location'}</h3>
+              {leg.start_date && leg.end_date && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {format(parseISO(leg.start_date), 'MMM d')} –{' '}
+                  {format(parseISO(leg.end_date), 'MMM d, yyyy')}
+                  {leg.nights != null && ` · ${leg.nights} nights`}
+                </p>
+              )}
             </div>
-          </CardHeader>
+            <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
+              {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+            </Button>
+          </div>
 
           {leg.accommodation && !expanded && (() => {
             const acc = leg.accommodation!;
@@ -436,16 +435,14 @@ function LocationLegCard({
               costLine = ` · $${total.toLocaleString(undefined, { maximumFractionDigits: 2 })} total`;
             }
             return (
-              <CardContent className="pt-0">
-                <p className="text-xs text-muted-foreground">
-                  🏠 {acc.name}{costLine}
-                </p>
-              </CardContent>
+              <p className="text-xs text-muted-foreground mt-2">
+                {acc.name}{costLine}
+              </p>
             );
           })()}
 
           {expanded && (
-            <CardContent className="pt-0 space-y-4">
+            <div className="pt-3 space-y-4">
               {/* Location details */}
               <form onSubmit={legForm.handleSubmit(onSaveLeg)} className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -495,11 +492,11 @@ function LocationLegCard({
                 </div>
               </form>
 
-              <Separator />
+              <Separator className="bg-border/60" />
 
               {/* Accommodation */}
               <div>
-                <h4 className="text-sm font-semibold mb-2">Accommodation</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Accommodation</h4>
                 <form onSubmit={accForm.handleSubmit(onSaveAccommodation)} className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
@@ -553,13 +550,13 @@ function LocationLegCard({
                 </form>
               </div>
 
-              <Separator />
+              <Separator className="bg-border/60" />
 
               {/* Day trips */}
               <div>
-                <h4 className="text-sm font-semibold mb-2">Day Trips</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Day Trips</h4>
                 {leg.day_trips?.map((dt) => (
-                  <div key={dt.id} className="flex items-center justify-between text-sm py-1 border-b">
+                  <div key={dt.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40">
                     <span>
                       {dt.destination_name}
                       {dt.date && ` · ${format(parseISO(dt.date), 'MMM d')}`}
@@ -569,7 +566,7 @@ function LocationLegCard({
                         variant="outline"
                         className={cn(
                           'text-xs',
-                          dt.status === 'confirmed' ? 'border-orange-400 text-orange-600' : 'border-dashed',
+                          dt.status === 'confirmed' ? 'border-primary/40 text-primary' : 'border-dashed',
                         )}
                       >
                         {dt.status}
@@ -600,13 +597,13 @@ function LocationLegCard({
                 </form>
               </div>
 
-              <Separator />
+              <Separator className="bg-border/60" />
 
               {/* Activities */}
               <div>
-                <h4 className="text-sm font-semibold mb-2">Activities</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Activities</h4>
                 {leg.activities?.map((act) => (
-                  <div key={act.id} className="flex items-center justify-between text-sm py-1 border-b">
+                  <div key={act.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40">
                     <span>
                       {act.name}
                       {act.date && ` · ${format(parseISO(act.date), 'MMM d')}`}
@@ -636,9 +633,9 @@ function LocationLegCard({
                   </Button>
                 </form>
               </div>
-            </CardContent>
+            </div>
           )}
-        </Card>
+        </div>
       </div>
     </div>
   );
@@ -674,12 +671,12 @@ export default function RouteEditorPage() {
 
   if (isLoading)
     return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex justify-center py-16">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
 
-  if (!route) return <div className="text-center py-12 text-muted-foreground">Route not found</div>;
+  if (!route) return <div className="text-center py-16 text-muted-foreground">Route not found</div>;
 
   const legs = route.legs ?? [];
   const locationLegs = legs.filter((l) => l.type === 'location');
@@ -700,17 +697,17 @@ export default function RouteEditorPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="-ml-2">
+          <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground hover:text-foreground">
             <Link to={`/trips/${tripId}/routes`}>
               <ArrowLeft className="h-4 w-4 mr-1" />
               Routes
             </Link>
           </Button>
-          <h1 className="text-xl font-bold">{route.name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{route.name}</h1>
         </div>
-        <div className="flex items-center gap-1 border rounded-lg p-0.5">
+        <div className="flex items-center gap-0.5 border border-border/60 rounded-lg p-0.5">
           <Button
             variant={viewMode === 'list' ? 'secondary' : 'ghost'}
             size="sm"
@@ -731,7 +728,7 @@ export default function RouteEditorPage() {
       </div>
 
       {viewMode === 'timeline' && trip?.start_date && trip?.end_date ? (
-        <div className="mb-6">
+        <div className="mb-8">
           <RouteTimeline
             legs={legs}
             tripStartDate={trip.start_date}
@@ -746,7 +743,7 @@ export default function RouteEditorPage() {
           />
         </div>
       ) : viewMode === 'timeline' ? (
-        <div className="text-center py-12 text-muted-foreground mb-6">
+        <div className="text-center py-16 text-muted-foreground mb-8">
           <p>Set trip start and end dates to use the timeline view.</p>
         </div>
       ) : null}
@@ -754,8 +751,8 @@ export default function RouteEditorPage() {
       {viewMode === 'list' && (
         <>
           {legs.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <MapPin className="h-10 w-10 mx-auto mb-3 opacity-30" />
+            <div className="text-center py-16 text-muted-foreground">
+              <MapPin className="h-10 w-10 mx-auto mb-3 opacity-20" strokeWidth={1.5} />
               <p>No locations yet. Add your first stop.</p>
             </div>
           ) : (
@@ -769,7 +766,7 @@ export default function RouteEditorPage() {
                   elements.push(
                     <div key={key} className="relative flex justify-center my-1">
                       <button
-                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-dashed border-muted-foreground/40 bg-muted/20 text-sm text-muted-foreground hover:bg-accent hover:text-foreground transition-colors cursor-pointer"
+                        className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-dashed border-muted-foreground/30 bg-muted/10 text-sm text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-all cursor-pointer"
                         onClick={async () => {
                           await createLeg.mutateAsync({
                             type: 'travel',
@@ -826,45 +823,43 @@ export default function RouteEditorPage() {
             const totalOffset = (offsets ?? []).reduce((sum, o) => sum + o.amount, 0);
             const outOfPocket = totalCost - totalOffset;
             return (
-              <Card className="mt-6">
-                <CardContent className="pt-4">
-                  <h3 className="text-sm font-semibold mb-3">Running Totals</h3>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="mt-8 py-4 px-5 rounded-xl border border-border/60 bg-card">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Running Totals</h3>
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <p className="text-muted-foreground text-xs">Transport</p>
+                    <p className="font-bold tabular-nums">${transportCost.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Accommodation</p>
+                    <p className="font-bold tabular-nums">${accCost.toLocaleString()}</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground text-xs">Route Total</p>
+                    <p className="font-bold tabular-nums">${totalCost.toLocaleString()}</p>
+                  </div>
+                </div>
+                {totalOffset > 0 && (
+                  <div className="grid grid-cols-3 gap-4 text-sm mt-3 pt-3 border-t border-border/60">
                     <div>
-                      <p className="text-muted-foreground text-xs">Transport</p>
-                      <p className="font-bold">${transportCost.toLocaleString()}</p>
+                      <p className="text-muted-foreground text-xs">Offset</p>
+                      <p className="font-bold text-green-700 tabular-nums">-${totalOffset.toLocaleString()}</p>
                     </div>
+                    <div />
                     <div>
-                      <p className="text-muted-foreground text-xs">Accommodation</p>
-                      <p className="font-bold">${accCost.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground text-xs">Route Total</p>
-                      <p className="font-bold">${totalCost.toLocaleString()}</p>
+                      <p className="text-muted-foreground text-xs">Out of Pocket</p>
+                      <p className="font-bold text-lg tabular-nums">${outOfPocket.toLocaleString()}</p>
                     </div>
                   </div>
-                  {totalOffset > 0 && (
-                    <div className="grid grid-cols-3 gap-4 text-sm mt-3 pt-3 border-t">
-                      <div>
-                        <p className="text-muted-foreground text-xs">Offset</p>
-                        <p className="font-bold text-green-600">-${totalOffset.toLocaleString()}</p>
-                      </div>
-                      <div />
-                      <div>
-                        <p className="text-muted-foreground text-xs">Out of Pocket</p>
-                        <p className="font-bold text-lg">${outOfPocket.toLocaleString()}</p>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                )}
+              </div>
             );
           })()}
         </>
       )}
 
       <div className="mt-4">
-        <Button onClick={() => setAddLocationOpen(true)} variant="outline" className="w-full">
+        <Button onClick={() => setAddLocationOpen(true)} variant="outline" className="w-full border-dashed border-border/60 text-muted-foreground hover:text-foreground">
           <Plus className="h-4 w-4 mr-2" />
           Add Location
         </Button>

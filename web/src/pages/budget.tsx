@@ -17,12 +17,12 @@ const categoryLabels: Record<string, string> = {
   activities: 'Activities',
 };
 
-const categoryColors: Record<string, string> = {
-  flights: 'bg-blue-500',
-  accommodation: 'bg-purple-500',
-  transport: 'bg-orange-500',
-  car_rental: 'bg-yellow-500',
-  activities: 'bg-green-500',
+const categoryAccents: Record<string, string> = {
+  flights: 'bg-primary',
+  accommodation: 'bg-purple-600',
+  transport: 'bg-amber-600',
+  car_rental: 'bg-yellow-600',
+  activities: 'bg-green-700',
 };
 
 export default function BudgetPage() {
@@ -40,8 +40,8 @@ export default function BudgetPage() {
 
   if (isLoading)
     return (
-      <div className="flex justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent" />
+      <div className="flex justify-center py-16">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
       </div>
     );
 
@@ -51,18 +51,18 @@ export default function BudgetPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-2 mb-6">
-        <Button variant="ghost" size="sm" asChild className="-ml-2">
+      <div className="flex items-center gap-2 mb-8">
+        <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground hover:text-foreground">
           <Link to={`/trips/${tripId}`}>
             <ArrowLeft className="h-4 w-4 mr-1" />
             Trip
           </Link>
         </Button>
-        <h1 className="text-xl font-bold">Budget</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Budget</h1>
       </div>
 
       {budget && budget.routes.length > 1 && (
-        <div className="mb-4">
+        <div className="mb-6">
           <Select
             value={selectedRouteId ?? budget.selected_route.id}
             onValueChange={(v) => setSelectedRouteId(v)}
@@ -82,57 +82,46 @@ export default function BudgetPage() {
       )}
 
       {!budget ? (
-        <p className="text-center py-12 text-muted-foreground">No budget data yet. Add routes with costs to see totals.</p>
+        <p className="text-center py-16 text-muted-foreground">No budget data yet. Add routes with costs to see totals.</p>
       ) : (
-        <div className="space-y-6">
-          {/* Stat cards */}
-          <div className="grid grid-cols-3 gap-3">
-            <Card>
-              <CardHeader className="pb-1 pt-3 px-4">
-                <CardTitle className="text-xs text-muted-foreground font-medium">Trip Total</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                <p className="text-xl font-bold">${budget.trip_total.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-1 pt-3 px-4">
-                <CardTitle className="text-xs text-muted-foreground font-medium">Offset</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                <p className="text-xl font-bold text-green-600">-${budget.offset.toLocaleString()}</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader className="pb-1 pt-3 px-4">
-                <CardTitle className="text-xs text-muted-foreground font-medium">Out of Pocket</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-3">
-                <p className="text-xl font-bold">${budget.out_of_pocket.toLocaleString()}</p>
-              </CardContent>
-            </Card>
+        <div className="space-y-8">
+          {/* Stat row */}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="py-4 px-5 rounded-xl border border-border/60 bg-card">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Trip Total</p>
+              <p className="text-2xl font-bold tracking-tight">${budget.trip_total.toLocaleString()}</p>
+            </div>
+            <div className="py-4 px-5 rounded-xl border border-border/60 bg-card">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Offset</p>
+              <p className="text-2xl font-bold tracking-tight text-green-700">-${budget.offset.toLocaleString()}</p>
+            </div>
+            <div className="py-4 px-5 rounded-xl border border-border/60 bg-card">
+              <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide mb-1">Out of Pocket</p>
+              <p className="text-2xl font-bold tracking-tight">${budget.out_of_pocket.toLocaleString()}</p>
+            </div>
           </div>
 
           {/* Offsets */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">Offsets</CardTitle>
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">Offsets</h2>
               <Button
                 variant="outline"
                 size="sm"
+                className="h-7 text-xs"
                 onClick={() => {
                   setAddingOffset(true);
                   setOffsetAmount('');
                   setOffsetDesc('');
                 }}
               >
-                <Plus className="h-3.5 w-3.5 mr-1" />
+                <Plus className="h-3 w-3 mr-1" />
                 Add
               </Button>
-            </CardHeader>
-            <CardContent className="space-y-2">
+            </div>
+            <div className="rounded-xl border border-border/60 bg-card divide-y divide-border/60">
               {addingOffset && (
-                <div className="flex gap-2 items-end border rounded-md p-2 bg-muted/30">
+                <div className="flex gap-2 items-end p-3">
                   <div className="flex-1">
                     <Label className="text-xs">Description</Label>
                     <Input
@@ -172,7 +161,7 @@ export default function BudgetPage() {
               {offsets && offsets.length > 0 ? (
                 offsets.map((o) =>
                   editingId === o.id ? (
-                    <div key={o.id} className="flex gap-2 items-end border rounded-md p-2 bg-muted/30">
+                    <div key={o.id} className="flex gap-2 items-end p-3">
                       <div className="flex-1">
                         <Label className="text-xs">Description</Label>
                         <Input
@@ -211,10 +200,10 @@ export default function BudgetPage() {
                       </Button>
                     </div>
                   ) : (
-                    <div key={o.id} className="flex items-center justify-between py-1.5 px-1 group">
+                    <div key={o.id} className="flex items-center justify-between py-3 px-4 group">
                       <span className="text-sm">{o.description}</span>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-green-600">${o.amount.toLocaleString()}</span>
+                        <span className="text-sm font-medium text-green-700">${o.amount.toLocaleString()}</span>
                         <Button
                           variant="ghost"
                           size="sm"
@@ -240,67 +229,63 @@ export default function BudgetPage() {
                   ),
                 )
               ) : !addingOffset ? (
-                <p className="text-sm text-muted-foreground text-center py-2">No offsets yet. Add credits, rewards, or reimbursements.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No offsets yet. Add credits, rewards, or reimbursements.</p>
               ) : null}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* By Category */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">By Category</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          <section>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">By Category</h2>
+            <div className="space-y-4">
               {(Object.entries(budget.by_category) as [string, number][]).map(([key, value]) => (
                 <div key={key}>
-                  <div className="flex justify-between text-sm mb-1">
-                    <span>{categoryLabels[key] ?? key}</span>
-                    <span className="font-medium">${value.toLocaleString()}</span>
+                  <div className="flex justify-between text-sm mb-1.5">
+                    <span className="font-medium">{categoryLabels[key] ?? key}</span>
+                    <span className="tabular-nums">${value.toLocaleString()}</span>
                   </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
+                  <div className="h-1.5 rounded-full bg-muted overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${categoryColors[key] ?? 'bg-gray-400'} transition-all`}
+                      className={`h-full rounded-full ${categoryAccents[key] ?? 'bg-muted-foreground/40'} transition-all`}
                       style={{ width: `${maxCategory > 0 ? (value / maxCategory) * 100 : 0}%` }}
                     />
                   </div>
                 </div>
               ))}
-            </CardContent>
-          </Card>
+            </div>
+          </section>
 
           {/* By Location */}
           {budget.by_location && budget.by_location.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">By Location</CardTitle>
-              </CardHeader>
-              <CardContent>
+            <section>
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground mb-3">By Location</h2>
+              <div className="rounded-xl border border-border/60 bg-card overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b">
-                        <th className="text-left py-2 font-medium text-muted-foreground">Location</th>
-                        <th className="text-right py-2 font-medium text-muted-foreground">Nights</th>
-                        <th className="text-right py-2 font-medium text-muted-foreground">Accommodation</th>
-                        <th className="text-right py-2 font-medium text-muted-foreground">Transport</th>
-                        <th className="text-right py-2 font-medium text-muted-foreground">Total</th>
+                      <tr className="border-b border-border/60">
+                        <th className="text-left py-3 px-4 font-medium text-muted-foreground text-xs uppercase tracking-wide">Location</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground text-xs uppercase tracking-wide">Nights</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground text-xs uppercase tracking-wide">Accommodation</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground text-xs uppercase tracking-wide">Transport</th>
+                        <th className="text-right py-3 px-4 font-medium text-muted-foreground text-xs uppercase tracking-wide">Total</th>
                       </tr>
                     </thead>
                     <tbody>
                       {budget.by_location.map((loc, i) => (
-                        <tr key={i} className="border-b last:border-0">
-                          <td className="py-2 font-medium">{loc.name}</td>
-                          <td className="py-2 text-right text-muted-foreground">{loc.nights}</td>
-                          <td className="py-2 text-right">${loc.accommodation.toLocaleString()}</td>
-                          <td className="py-2 text-right">${loc.transport.toLocaleString()}</td>
-                          <td className="py-2 text-right font-semibold">${loc.total.toLocaleString()}</td>
+                        <tr key={i} className="border-b border-border/40 last:border-0">
+                          <td className="py-3 px-4 font-medium">{loc.name}</td>
+                          <td className="py-3 px-4 text-right text-muted-foreground tabular-nums">{loc.nights}</td>
+                          <td className="py-3 px-4 text-right tabular-nums">${loc.accommodation.toLocaleString()}</td>
+                          <td className="py-3 px-4 text-right tabular-nums">${loc.transport.toLocaleString()}</td>
+                          <td className="py-3 px-4 text-right font-semibold tabular-nums">${loc.total.toLocaleString()}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </section>
           )}
         </div>
       )}
