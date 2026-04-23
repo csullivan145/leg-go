@@ -8,10 +8,18 @@ export default defineConfig({
     alias: { '@': path.resolve(__dirname, './src') },
   },
   server: {
-    port: 5173,
+    host: 'localhost',
+    port: 5180,
+    strictPort: true,
     proxy: {
       '/auth': 'http://localhost:8787',
       '/api': 'http://localhost:8787',
     },
+    hmr: {
+      host: 'local.leggo.csullivan.me',
+      protocol: 'wss',
+      clientPort: 443,
+    },
+    allowedHosts: ['local.leggo.csullivan.me'],
   },
 });

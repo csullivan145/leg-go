@@ -13,8 +13,17 @@ import {
   getMonth,
   getYear,
 } from 'date-fns';
+import { Plane, Train, Ship, Car, Bus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { Leg } from '@leg-go/shared';
+import type { Leg, TransportType } from '@leg-go/shared';
+
+const transportIcons: Record<TransportType, React.ComponentType<{ className?: string }>> = {
+  flight: Plane,
+  train: Train,
+  ferry: Ship,
+  car: Car,
+  bus: Bus,
+};
 
 interface DayTripItem {
   id: string;
@@ -72,6 +81,18 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
       return { leg, start, end, colorIndex: i };
     });
   }, [locationLegs, tripStart]);
+
+  // Build travel items — single- or multi-day markers (e.g., red-eye flight) with transport icons
+  const travelItems = useMemo(() => {
+    const items: { id: string; leg: LegWithDetails; start: Date; end: Date }[] = [];
+    for (const leg of legs) {
+      if (leg.type !== 'travel' || !leg.start_date) continue;
+      const start = parseISO(leg.start_date);
+      const end = leg.end_date ? parseISO(leg.end_date) : start;
+      items.push({ id: leg.id, leg, start, end: end < start ? start : end });
+    }
+    return items;
+  }, [legs]);
 
   // Build day trip items — single-day events tied to parent location color
   const dayTripItems = useMemo(() => {
@@ -204,10 +225,32 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
         visibleDayTrips.push({ dayTrip: dt, col: differenceInDays(dt.date, weekStart) });
       }
 
+      // Find travel items that fall in this week
+      const visibleTravel: {
+        travel: (typeof travelItems)[0];
+        startCol: number;
+        endCol: number;
+        continues_before: boolean;
+        continues_after: boolean;
+      }[] = [];
+
+      for (const tv of travelItems) {
+        if (tv.end < weekStart || tv.start > weekEnd) continue;
+        const clippedStart = tv.start < weekStart ? weekStart : tv.start;
+        const clippedEnd = tv.end > weekEnd ? weekEnd : tv.end;
+        visibleTravel.push({
+          travel: tv,
+          startCol: differenceInDays(clippedStart, weekStart),
+          endCol: differenceInDays(clippedEnd, weekStart),
+          continues_before: tv.start < weekStart,
+          continues_after: tv.end > weekEnd,
+        });
+      }
+
       // Sort locations by start, then wider first
       visibleEvents.sort((a, b) => a.startCol - b.startCol || (b.endCol - b.startCol) - (a.endCol - a.startCol));
 
-      // Assign vertical slots — locations first, then day trips
+      // Assign vertical slots — locations first, then day trips, then travel
       const slotEnds: number[] = [];
       const assignSlot = (startCol: number, endCol: number) => {
         for (let s = 0; s < slotEnds.length; s++) {
@@ -223,12 +266,13 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
 
       const slottedEvents = visibleEvents.map((ev) => ({ ...ev, slot: assignSlot(ev.startCol, ev.endCol) }));
       const slottedDayTrips = visibleDayTrips.map((dt) => ({ ...dt, slot: assignSlot(dt.col, dt.col) }));
+      const slottedTravel = visibleTravel.map((tv) => ({ ...tv, slot: assignSlot(tv.startCol, tv.endCol) }));
 
       const maxSlots = slotEnds.length;
 
-      return { weekStart, weekDays, events: slottedEvents, dayTrips: slottedDayTrips, maxSlots };
+      return { weekStart, weekDays, events: slottedEvents, dayTrips: slottedDayTrips, travel: slottedTravel, maxSlots };
     });
-  }, [weeks, legItems, dayTripItems]);
+  }, [weeks, legItems, dayTripItems, travelItems]);
 
   // Compute drag-adjusted position for an event
   const getDragAdjusted = (itemId: string, startCol: number, endCol: number) => {
@@ -289,7 +333,7 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
       </div>
 
       {/* Week rows */}
-      {weekRows.map(({ weekStart, weekDays, events, dayTrips, maxSlots }, weekIdx) => {
+      {weekRows.map(({ weekStart, weekDays, events, dayTrips, travel, maxSlots }, weekIdx) => {
         const eventAreaHeight = Math.max(0, maxSlots) * (EVENT_HEIGHT + EVENT_GAP);
         const minCellHeight = 64 + eventAreaHeight;
         const spans = weekMonthSpans[weekIdx];
@@ -510,6 +554,41 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
                     }}
                   >
                     <span className="truncate px-1.5">{dt.dayTrip.name}</span>
+                  </div>
+                );
+              })}
+              {/* Travel markers — one- or multi-day bars with transport icon */}
+              {travel.map((tv) => {
+                if (tv.endCol < 0 || tv.startCol > 6) return null;
+                const clippedStart = Math.max(0, tv.startCol);
+                const clippedEnd = Math.min(6, tv.endCol);
+                const leftPct = (clippedStart / 7) * 100;
+                const widthPct = ((clippedEnd - clippedStart + 1) / 7) * 100;
+                const Icon = tv.travel.leg.transport_type
+                  ? transportIcons[tv.travel.leg.transport_type]
+                  : null;
+                return (
+                  <div
+                    key={tv.travel.id}
+                    className={cn(
+                      'absolute flex items-center gap-1 text-[10px] font-medium pointer-events-auto border-2 border-foreground/40 bg-foreground text-background hover:bg-foreground/90 z-20 cursor-pointer',
+                      tv.continues_before ? 'rounded-l-none border-l-0' : 'rounded-l-md',
+                      tv.continues_after ? 'rounded-r-none border-r-0' : 'rounded-r-md',
+                    )}
+                    style={{
+                      left: `calc(${leftPct}% + 3px)`,
+                      width: `calc(${widthPct}% - 6px)`,
+                      top: tv.slot * (EVENT_HEIGHT + EVENT_GAP),
+                      height: EVENT_HEIGHT - 2,
+                    }}
+                    title={tv.travel.leg.name ?? 'Travel'}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectLeg?.(tv.travel.leg.id);
+                    }}
+                  >
+                    {Icon && <Icon className="h-3 w-3 ml-1 shrink-0" />}
+                    <span className="truncate px-1">{tv.travel.leg.name || 'Travel'}</span>
                   </div>
                 );
               })}

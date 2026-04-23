@@ -4,3 +4,4 @@ dist/
 .wrangler/
 .superpowers/
 *.local
+.d1-*.sql

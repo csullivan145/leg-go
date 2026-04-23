@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { Plus, MapPin, ArrowRight } from 'lucide-react';
+import { Plus, MapPin, ArrowRight, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DatePicker } from '@/components/ui/date-picker';
-import { useTrips, useCreateTrip } from '@/hooks/queries/use-trips';
+import { useTrips, useCreateTrip, useDeleteTrip } from '@/hooks/queries/use-trips';
+import type { Trip } from '@leg-go/shared';
 import { cn } from '@/lib/utils';
 
 const statusStyles: Record<string, string> = {
@@ -24,6 +25,77 @@ interface TripFormValues {
   description: string;
   start_date: string;
   end_date: string;
+}
+
+function TripCard({ trip }: { trip: Trip }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const deleteTrip = useDeleteTrip();
+
+  return (
+    <>
+      <Link to={`/trips/${trip.id}`} className="block group">
+        <div className="flex items-center justify-between py-4 px-5 rounded-xl border border-border/60 bg-card hover:border-primary/30 hover:shadow-sm transition-all">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 mb-1">
+              <h2 className="text-base font-semibold truncate">{trip.name}</h2>
+              <Badge className={cn('shrink-0 text-[11px] capitalize font-medium', statusStyles[trip.status])}>
+                {trip.status}
+              </Badge>
+            </div>
+            {trip.description && (
+              <p className="text-sm text-muted-foreground line-clamp-1 mb-0.5">{trip.description}</p>
+            )}
+            {(trip.start_date || trip.end_date) && (
+              <p className="text-xs text-muted-foreground/70">
+                {trip.start_date ? format(parseISO(trip.start_date), 'MMM d, yyyy') : '?'}
+                {' — '}
+                {trip.end_date ? format(parseISO(trip.end_date), 'MMM d, yyyy') : '?'}
+              </p>
+            )}
+          </div>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 ml-2 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive focus-visible:opacity-100 transition-opacity shrink-0"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setConfirmOpen(true);
+            }}
+            aria-label={`Delete trip ${trip.name}`}
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0 ml-2" />
+        </div>
+      </Link>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete trip?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes &ldquo;{trip.name}&rdquo; along with all its routes, legs, and shared access. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={deleteTrip.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                deleteTrip.mutate(trip.id, { onSuccess: () => setConfirmOpen(false) })
+              }
+              disabled={deleteTrip.isPending}
+            >
+              {deleteTrip.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export default function TripsPage() {
@@ -118,29 +190,7 @@ export default function TripsPage() {
       ) : (
         <div className="space-y-3">
           {trips?.map((trip) => (
-            <Link key={trip.id} to={`/trips/${trip.id}`} className="block group">
-              <div className="flex items-center justify-between py-4 px-5 rounded-xl border border-border/60 bg-card hover:border-primary/30 hover:shadow-sm transition-all">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <h2 className="text-base font-semibold truncate">{trip.name}</h2>
-                    <Badge className={cn('shrink-0 text-[11px] capitalize font-medium', statusStyles[trip.status])}>
-                      {trip.status}
-                    </Badge>
-                  </div>
-                  {trip.description && (
-                    <p className="text-sm text-muted-foreground line-clamp-1 mb-0.5">{trip.description}</p>
-                  )}
-                  {(trip.start_date || trip.end_date) && (
-                    <p className="text-xs text-muted-foreground/70">
-                      {trip.start_date ? format(parseISO(trip.start_date), 'MMM d, yyyy') : '?'}
-                      {' — '}
-                      {trip.end_date ? format(parseISO(trip.end_date), 'MMM d, yyyy') : '?'}
-                    </p>
-                  )}
-                </div>
-                <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0 ml-4" />
-              </div>
-            </Link>
+            <TripCard key={trip.id} trip={trip} />
           ))}
         </div>
       )}

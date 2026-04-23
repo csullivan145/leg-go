@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import {
   ArrowLeft,
   Plus,
@@ -15,6 +15,7 @@ import {
   List,
   CalendarDays,
   Copy,
+  AlertTriangle,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { format, parseISO, differenceInDays } from 'date-fns';
@@ -26,12 +27,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { useRoute, useRoutes } from '@/hooks/queries/use-routes';
+import { useRoute, useRoutes, useDeleteRoute } from '@/hooks/queries/use-routes';
 import { useOffsets } from '@/hooks/queries/use-offsets';
 import { useTrip } from '@/hooks/queries/use-trips';
 import { RouteTimeline } from '@/components/route-timeline';
+import { CurrencyConverter } from '@/components/currency-converter';
 import {
   useCreateLeg,
   useUpdateLeg,
@@ -41,6 +43,7 @@ import {
   useUpdateDayTrip,
   useDeleteDayTrip,
   useCreateActivity,
+  useUpdateActivity,
   useDeleteActivity,
   useCopyLeg,
 } from '@/hooks/queries/use-legs';
@@ -77,6 +80,32 @@ function getNights(l: { nights?: number | null; start_date?: string | null; end_
     return diff > 0 ? diff : 0;
   }
   return 0;
+}
+
+function getLocationDateWarning(
+  prev: { name?: string | null; end_date?: string | null },
+  curr: { name?: string | null; start_date?: string | null },
+): { kind: 'gap' | 'overlap'; days: number; message: string } | null {
+  if (!prev.end_date || !curr.start_date) return null;
+  const diff = differenceInDays(parseISO(curr.start_date), parseISO(prev.end_date));
+  const prevName = prev.name || 'previous stop';
+  const currName = curr.name || 'next stop';
+  if (diff > 0) {
+    return {
+      kind: 'gap',
+      days: diff,
+      message: `Missing ${diff} day${diff === 1 ? '' : 's'} between ${prevName} and ${currName} — extend one of these stays or add a stop`,
+    };
+  }
+  if (diff < 0) {
+    const overlap = Math.abs(diff);
+    return {
+      kind: 'overlap',
+      days: overlap,
+      message: `${overlap}-day overlap between ${prevName} and ${currName} — one of these is too long`,
+    };
+  }
+  return null;
 }
 
 interface LegWithDetails extends Leg {
@@ -135,6 +164,226 @@ function CopyToRouteMenu({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function NotesField({
+  register,
+  hasExistingNote,
+}: {
+  register: ReturnType<ReturnType<typeof useForm>['register']>;
+  hasExistingNote: boolean;
+}) {
+  const [open, setOpen] = useState(hasExistingNote);
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md border border-dashed border-border/60 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        Add note
+      </button>
+    );
+  }
+
+  return (
+    <div>
+      <Label className="text-xs">Notes</Label>
+      <Textarea className="text-sm min-h-0 h-14" {...register} />
+    </div>
+  );
+}
+
+function DayTripRow({
+  dayTrip,
+  tripId,
+  routeId,
+}: {
+  dayTrip: DayTrip;
+  tripId: string;
+  routeId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const updateDayTrip = useUpdateDayTrip(tripId, routeId);
+  const deleteDayTrip = useDeleteDayTrip(tripId, routeId);
+  const form = useForm({
+    defaultValues: {
+      destination_name: dayTrip.destination_name,
+      date: dayTrip.date ?? '',
+      status: dayTrip.status,
+    },
+  });
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={form.handleSubmit(async (v) => {
+          await updateDayTrip.mutateAsync({ dayTripId: dayTrip.id, ...v } as never);
+          setEditing(false);
+        })}
+        className="flex flex-wrap gap-2 py-1.5 border-b border-border/40 items-center"
+      >
+        <Input
+          className="h-8 text-sm flex-1 min-w-32"
+          placeholder="Destination"
+          autoFocus
+          {...form.register('destination_name', { required: true })}
+        />
+        <Input className="h-8 text-sm w-36" type="date" {...form.register('date')} />
+        <Select
+          value={form.watch('status')}
+          onValueChange={(v) => form.setValue('status', v as 'idea' | 'confirmed')}
+        >
+          <SelectTrigger className="h-8 w-28 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="idea">Idea</SelectItem>
+            <SelectItem value="confirmed">Confirmed</SelectItem>
+          </SelectContent>
+        </Select>
+        <Button type="submit" size="sm" variant="outline" disabled={updateDayTrip.isPending}>
+          Save
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            form.reset({
+              destination_name: dayTrip.destination_name,
+              date: dayTrip.date ?? '',
+              status: dayTrip.status,
+            });
+            setEditing(false);
+          }}
+        >
+          Cancel
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between text-sm py-1.5 border-b border-border/40">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-left hover:text-primary transition-colors"
+      >
+        {dayTrip.destination_name}
+        {dayTrip.date && ` · ${format(parseISO(dayTrip.date), 'MMM d')}`}
+      </button>
+      <div className="flex items-center gap-2">
+        <Badge
+          variant="outline"
+          className={cn(
+            'text-xs',
+            dayTrip.status === 'confirmed' ? 'border-primary/40 text-primary' : 'border-dashed',
+          )}
+        >
+          {dayTrip.status}
+        </Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 w-6 p-0 text-destructive"
+          onClick={() => deleteDayTrip.mutate(dayTrip.id)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ActivityRow({
+  activity,
+  tripId,
+  routeId,
+}: {
+  activity: Activity;
+  tripId: string;
+  routeId: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const updateActivity = useUpdateActivity(tripId, routeId);
+  const deleteActivity = useDeleteActivity(tripId, routeId);
+  const form = useForm({
+    defaultValues: {
+      name: activity.name,
+      date: activity.date ?? '',
+      time: activity.time ?? '',
+    },
+  });
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={form.handleSubmit(async (v) => {
+          await updateActivity.mutateAsync({
+            activityId: activity.id,
+            name: v.name,
+            date: v.date || null,
+            time: v.time || null,
+          } as never);
+          setEditing(false);
+        })}
+        className="flex flex-wrap gap-2 py-1.5 border-b border-border/40 items-center"
+      >
+        <Input
+          className="h-8 text-sm flex-1 min-w-32"
+          placeholder="Activity name"
+          autoFocus
+          {...form.register('name', { required: true })}
+        />
+        <Input className="h-8 text-sm w-36" type="date" {...form.register('date')} />
+        <Input className="h-8 text-sm w-28" type="time" {...form.register('time')} />
+        <Button type="submit" size="sm" variant="outline" disabled={updateActivity.isPending}>
+          Save
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          onClick={() => {
+            form.reset({
+              name: activity.name,
+              date: activity.date ?? '',
+              time: activity.time ?? '',
+            });
+            setEditing(false);
+          }}
+        >
+          Cancel
+        </Button>
+      </form>
+    );
+  }
+
+  return (
+    <div className="flex items-center justify-between text-sm py-1.5 border-b border-border/40">
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        className="text-left hover:text-primary transition-colors"
+      >
+        {activity.name}
+        {activity.date && ` · ${format(parseISO(activity.date), 'MMM d')}`}
+        {activity.time && ` at ${activity.time}`}
+      </button>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="h-6 w-6 p-0 text-destructive"
+        onClick={() => deleteActivity.mutate(activity.id)}
+      >
+        <Trash2 className="h-3 w-3" />
+      </Button>
+    </div>
   );
 }
 
@@ -232,7 +481,12 @@ function TravelLegCard({
                 </div>
                 <div>
                   <Label className="text-xs">Cost ($) *</Label>
-                  <Input className="h-8 text-sm" type="number" step="0.01" {...register('cost')} />
+                  <div className="flex items-center gap-1">
+                    <Input className="h-8 text-sm" type="number" step="0.01" {...register('cost')} />
+                    <CurrencyConverter
+                      onConvert={(usd) => setValue('cost', usd)}
+                    />
+                  </div>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -367,6 +621,8 @@ function LocationLegCard({
 
   const dayTripForm = useForm({ defaultValues: { destination_name: '', date: '', status: 'idea' as const } });
   const activityForm = useForm({ defaultValues: { name: '', date: '' } });
+  const [addingDayTrip, setAddingDayTrip] = useState(false);
+  const [addingActivity, setAddingActivity] = useState(false);
 
   const onSaveLeg = async (values: Record<string, unknown>) => {
     await updateLeg.mutateAsync({ legId: leg.id, ...values } as never);
@@ -405,18 +661,51 @@ function LocationLegCard({
           <div className="w-px bg-border/60 flex-1 min-h-4" />
         </div>
         <div className="flex-1 mb-2 py-3 px-4 rounded-xl border border-border/60 bg-card">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold">{leg.name || 'Unnamed Location'}</h3>
-              {leg.start_date && leg.end_date && (
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {format(parseISO(leg.start_date), 'MMM d')} –{' '}
-                  {format(parseISO(leg.end_date), 'MMM d, yyyy')}
-                  {leg.nights != null && ` · ${leg.nights} nights`}
-                </p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              {expanded ? (
+                <>
+                  <Input
+                    autoFocus={defaultExpanded}
+                    placeholder="Location name"
+                    className="h-8 text-base font-semibold"
+                    {...legForm.register('name')}
+                  />
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <div className="w-36">
+                      <DatePicker
+                        value={legForm.watch('start_date')}
+                        onChange={(date) => legForm.setValue('start_date', date)}
+                        placeholder="Start"
+                      />
+                    </div>
+                    <span className="text-muted-foreground text-xs">–</span>
+                    <div className="w-36">
+                      <DatePicker
+                        value={legForm.watch('end_date')}
+                        onChange={(date) => legForm.setValue('end_date', date)}
+                        placeholder="End"
+                      />
+                    </div>
+                    {leg.nights != null && leg.nights > 0 && (
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">· {leg.nights} nights</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-base font-semibold">{leg.name || 'Unnamed Location'}</h3>
+                  {leg.start_date && leg.end_date && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {format(parseISO(leg.start_date), 'MMM d')} –{' '}
+                      {format(parseISO(leg.end_date), 'MMM d, yyyy')}
+                      {leg.nights != null && ` · ${leg.nights} nights`}
+                    </p>
+                  )}
+                </>
               )}
             </div>
-            <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground">
+            <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="text-muted-foreground shrink-0">
               {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
             </Button>
           </div>
@@ -443,61 +732,14 @@ function LocationLegCard({
 
           {expanded && (
             <div className="pt-3 space-y-4">
-              {/* Location details */}
-              <form onSubmit={legForm.handleSubmit(onSaveLeg)} className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Location Name</Label>
-                    <Input className="h-8 text-sm" {...legForm.register('name')} />
-                  </div>
-                  <div />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Start Date</Label>
-                    <DatePicker
-                      value={legForm.watch('start_date')}
-                      onChange={(date) => legForm.setValue('start_date', date)}
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">End Date</Label>
-                    <DatePicker
-                      value={legForm.watch('end_date')}
-                      onChange={(date) => legForm.setValue('end_date', date)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label className="text-xs">Notes</Label>
-                  <Textarea className="text-sm min-h-0 h-14" {...legForm.register('notes')} />
-                </div>
-                <div className="flex justify-between items-center">
-                  <div className="flex gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="text-destructive"
-                      onClick={() => deleteLeg.mutate(leg.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 mr-1" />
-                      Remove
-                    </Button>
-                    <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
-                  </div>
-                  <Button type="submit" size="sm" disabled={updateLeg.isPending}>
-                    Save Location
-                  </Button>
-                </div>
-              </form>
+              <NotesField register={legForm.register('notes')} hasExistingNote={!!leg.notes} />
 
               <Separator className="bg-border/60" />
 
               {/* Accommodation */}
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Accommodation</h4>
-                <form onSubmit={accForm.handleSubmit(onSaveAccommodation)} className="space-y-3">
+                <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">Name</Label>
@@ -511,11 +753,61 @@ function LocationLegCard({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">$/night</Label>
-                      <Input className="h-8 text-sm" type="number" step="0.01" {...accForm.register('cost_per_night', { valueAsNumber: true })} />
+                      <div className="flex items-center gap-1">
+                        <Input
+                          className="h-8 text-sm"
+                          type="number"
+                          step="0.01"
+                          {...accForm.register('cost_per_night', {
+                            valueAsNumber: true,
+                            onChange: (e) => {
+                              const nights = getNights(leg);
+                              const val = parseFloat(e.target.value);
+                              if (nights > 0 && !isNaN(val)) {
+                                accForm.setValue('total_cost', +(val * nights).toFixed(2), { shouldDirty: true });
+                              }
+                            },
+                          })}
+                        />
+                        <CurrencyConverter
+                          onConvert={(usd) => {
+                            accForm.setValue('cost_per_night', usd, { shouldDirty: true });
+                            const nights = getNights(leg);
+                            if (nights > 0) {
+                              accForm.setValue('total_cost', +(usd * nights).toFixed(2), { shouldDirty: true });
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                     <div>
                       <Label className="text-xs">Total cost</Label>
-                      <Input className="h-8 text-sm" type="number" step="0.01" {...accForm.register('total_cost', { valueAsNumber: true })} />
+                      <div className="flex items-center gap-1">
+                        <Input
+                          className="h-8 text-sm"
+                          type="number"
+                          step="0.01"
+                          {...accForm.register('total_cost', {
+                            valueAsNumber: true,
+                            onChange: (e) => {
+                              const nights = getNights(leg);
+                              const val = parseFloat(e.target.value);
+                              if (nights > 0 && !isNaN(val)) {
+                                accForm.setValue('cost_per_night', +(val / nights).toFixed(2), { shouldDirty: true });
+                              }
+                            },
+                          })}
+                        />
+                        <CurrencyConverter
+                          onConvert={(usd) => {
+                            accForm.setValue('total_cost', usd, { shouldDirty: true });
+                            const nights = getNights(leg);
+                            if (nights > 0) {
+                              accForm.setValue('cost_per_night', +(usd / nights).toFixed(2), { shouldDirty: true });
+                            }
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
@@ -540,14 +832,8 @@ function LocationLegCard({
                       </label>
                     ))}
                   </div>
-                  <div>
-                    <Label className="text-xs">Notes</Label>
-                    <Textarea className="text-sm min-h-0 h-14" {...accForm.register('notes')} />
-                  </div>
-                  <Button type="submit" size="sm" disabled={upsertAccommodation.isPending}>
-                    Save Accommodation
-                  </Button>
-                </form>
+                  <NotesField register={accForm.register('notes')} hasExistingNote={!!leg.accommodation?.notes} />
+                </div>
               </div>
 
               <Separator className="bg-border/60" />
@@ -556,45 +842,44 @@ function LocationLegCard({
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Day Trips</h4>
                 {leg.day_trips?.map((dt) => (
-                  <div key={dt.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40">
-                    <span>
-                      {dt.destination_name}
-                      {dt.date && ` · ${format(parseISO(dt.date), 'MMM d')}`}
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          'text-xs',
-                          dt.status === 'confirmed' ? 'border-primary/40 text-primary' : 'border-dashed',
-                        )}
-                      >
-                        {dt.status}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-destructive"
-                        onClick={() => deleteDayTrip.mutate(dt.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
+                  <DayTripRow key={dt.id} dayTrip={dt} tripId={tripId} routeId={routeId} />
                 ))}
-                <form
-                  onSubmit={dayTripForm.handleSubmit(async (v) => {
-                    await createDayTrip.mutateAsync({ legId: leg.id, ...v } as never);
-                    dayTripForm.reset({ destination_name: '', date: '', status: 'idea' });
-                  })}
-                  className="flex gap-2 mt-2"
-                >
-                  <Input className="h-8 text-sm" placeholder="Destination" {...dayTripForm.register('destination_name', { required: true })} />
-                  <Input className="h-8 text-sm w-36" type="date" {...dayTripForm.register('date')} />
-                  <Button type="submit" size="sm" variant="outline" disabled={createDayTrip.isPending}>
+                {addingDayTrip ? (
+                  <form
+                    onSubmit={dayTripForm.handleSubmit(async (v) => {
+                      await createDayTrip.mutateAsync({ legId: leg.id, ...v } as never);
+                      dayTripForm.reset({ destination_name: '', date: '', status: 'idea' });
+                      setAddingDayTrip(false);
+                    })}
+                    className="flex gap-2 mt-2"
+                  >
+                    <Input className="h-8 text-sm" placeholder="Destination" autoFocus {...dayTripForm.register('destination_name', { required: true })} />
+                    <Input className="h-8 text-sm w-36" type="date" {...dayTripForm.register('date')} />
+                    <Button type="submit" size="sm" variant="outline" disabled={createDayTrip.isPending}>
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        dayTripForm.reset({ destination_name: '', date: '', status: 'idea' });
+                        setAddingDayTrip(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingDayTrip(true)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 mt-2 rounded-md border border-dashed border-border/60 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                  >
                     <Plus className="h-3.5 w-3.5" />
-                  </Button>
-                </form>
+                    Add day trip
+                  </button>
+                )}
               </div>
 
               <Separator className="bg-border/60" />
@@ -603,35 +888,73 @@ function LocationLegCard({
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Activities</h4>
                 {leg.activities?.map((act) => (
-                  <div key={act.id} className="flex items-center justify-between text-sm py-1.5 border-b border-border/40">
-                    <span>
-                      {act.name}
-                      {act.date && ` · ${format(parseISO(act.date), 'MMM d')}`}
-                      {act.time && ` at ${act.time}`}
-                    </span>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-destructive"
-                      onClick={() => deleteActivity.mutate(act.id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
+                  <ActivityRow key={act.id} activity={act} tripId={tripId} routeId={routeId} />
                 ))}
-                <form
-                  onSubmit={activityForm.handleSubmit(async (v) => {
-                    await createActivity.mutateAsync({ legId: leg.id, ...v } as never);
-                    activityForm.reset({ name: '', date: '' });
-                  })}
-                  className="flex gap-2 mt-2"
-                >
-                  <Input className="h-8 text-sm" placeholder="Activity name" {...activityForm.register('name', { required: true })} />
-                  <Input className="h-8 text-sm w-36" type="date" {...activityForm.register('date')} />
-                  <Button type="submit" size="sm" variant="outline" disabled={createActivity.isPending}>
+                {addingActivity ? (
+                  <form
+                    onSubmit={activityForm.handleSubmit(async (v) => {
+                      await createActivity.mutateAsync({ legId: leg.id, ...v } as never);
+                      activityForm.reset({ name: '', date: '' });
+                      setAddingActivity(false);
+                    })}
+                    className="flex gap-2 mt-2"
+                  >
+                    <Input className="h-8 text-sm" placeholder="Activity name" autoFocus {...activityForm.register('name', { required: true })} />
+                    <Input className="h-8 text-sm w-36" type="date" {...activityForm.register('date')} />
+                    <Button type="submit" size="sm" variant="outline" disabled={createActivity.isPending}>
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        activityForm.reset({ name: '', date: '' });
+                        setAddingActivity(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setAddingActivity(true)}
+                    className="w-full flex items-center justify-center gap-1.5 py-1.5 mt-2 rounded-md border border-dashed border-border/60 text-xs text-muted-foreground hover:bg-muted/40 hover:text-foreground transition-colors"
+                  >
                     <Plus className="h-3.5 w-3.5" />
+                    Add activity
+                  </button>
+                )}
+              </div>
+
+              <Separator className="bg-border/60" />
+
+              <div className="flex justify-between items-center">
+                <div className="flex gap-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => deleteLeg.mutate(leg.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5 mr-1" />
+                    Remove
                   </Button>
-                </form>
+                  <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={updateLeg.isPending || upsertAccommodation.isPending}
+                  onClick={async () => {
+                    await legForm.handleSubmit(onSaveLeg)();
+                    await accForm.handleSubmit(onSaveAccommodation)();
+                  }}
+                >
+                  {updateLeg.isPending || upsertAccommodation.isPending ? 'Saving…' : 'Save'}
+                </Button>
               </div>
             </div>
           )}
@@ -650,23 +973,18 @@ export default function RouteEditorPage() {
   const createLeg = useCreateLeg(tripId!, routeId!);
   const updateLeg = useUpdateLeg(tripId!, routeId!);
   const updateDayTrip = useUpdateDayTrip(tripId!, routeId!);
+  const deleteRoute = useDeleteRoute(tripId!);
+  const navigate = useNavigate();
   const otherRoutes = (allRoutes ?? []).filter((r: { id: string }) => r.id !== routeId).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }));
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
   const [selectedLegId, setSelectedLegId] = useState<string | null>(null);
-  const [addLocationOpen, setAddLocationOpen] = useState(false);
-  const addLocationForm = useForm({
-    defaultValues: { name: '', start_date: '', end_date: '' },
-  });
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [newlyCreatedLegId, setNewlyCreatedLegId] = useState<string | null>(null);
 
-  const onAddLocation = async (values: { name: string; start_date: string; end_date: string }) => {
-    await createLeg.mutateAsync({
-      type: 'location',
-      name: values.name,
-      start_date: values.start_date || null,
-      end_date: values.end_date || null,
-    } as never);
-    setAddLocationOpen(false);
-    addLocationForm.reset();
+  const handleAddLocation = async () => {
+    const result = (await createLeg.mutateAsync({ type: 'location' } as never)) as unknown as { leg: { id: string } } | { id: string };
+    const newId = 'leg' in result ? result.leg.id : result.id;
+    setNewlyCreatedLegId(newId);
   };
 
   if (isLoading)
@@ -707,25 +1025,65 @@ export default function RouteEditorPage() {
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">{route.name}</h1>
         </div>
-        <div className="flex items-center gap-0.5 border border-border/60 rounded-lg p-0.5">
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 border border-border/60 rounded-lg p-0.5">
+            <Button
+              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setViewMode('list')}
+            >
+              <List className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === 'timeline' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setViewMode('timeline')}
+            >
+              <CalendarDays className="h-4 w-4" />
+            </Button>
+          </div>
           <Button
-            variant={viewMode === 'list' ? 'secondary' : 'ghost'}
+            variant="ghost"
             size="sm"
-            className="h-7 px-2"
-            onClick={() => setViewMode('list')}
+            className="h-8 text-muted-foreground hover:text-destructive"
+            onClick={() => setDeleteOpen(true)}
+            aria-label="Delete route"
           >
-            <List className="h-4 w-4" />
-          </Button>
-          <Button
-            variant={viewMode === 'timeline' ? 'secondary' : 'ghost'}
-            size="sm"
-            className="h-7 px-2"
-            onClick={() => setViewMode('timeline')}
-          >
-            <CalendarDays className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" />
           </Button>
         </div>
       </div>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete route?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes &ldquo;{route.name}&rdquo; and all of its legs. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleteRoute.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                deleteRoute.mutate(routeId!, {
+                  onSuccess: () => {
+                    setDeleteOpen(false);
+                    navigate(`/trips/${tripId}/routes`);
+                  },
+                })
+              }
+              disabled={deleteRoute.isPending}
+            >
+              {deleteRoute.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {viewMode === 'timeline' && trip?.start_date && trip?.end_date ? (
         <div className="mb-8">
@@ -790,11 +1148,35 @@ export default function RouteEditorPage() {
                   addPlaceholder('travel-to-first', `Home → ${first.name}`, first.order, null, first.start_date);
                 }
 
+                let prevLocation: LegWithDetails | null = null;
                 sorted.forEach((leg, i) => {
                   // Check if we need a placeholder between previous location and this location
                   if (leg.type === 'location' && i > 0 && sorted[i - 1].type === 'location') {
                     const prev = sorted[i - 1];
                     addPlaceholder(`travel-gap-${i}`, `${prev.name} → ${leg.name}`, leg.order, prev.end_date, leg.start_date);
+                  }
+
+                  if (leg.type === 'location' && prevLocation) {
+                    const warning = getLocationDateWarning(prevLocation, leg);
+                    if (warning) {
+                      const tone =
+                        warning.kind === 'gap'
+                          ? 'border-red-500/40 bg-red-500/10 text-red-800 dark:text-red-300'
+                          : 'border-yellow-500/40 bg-yellow-400/15 text-yellow-900 dark:text-yellow-200';
+                      elements.push(
+                        <div
+                          key={`warn-${leg.id}`}
+                          className={cn(
+                            'mx-1 my-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm',
+                            tone,
+                          )}
+                          role="alert"
+                        >
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                          <span className="leading-snug">{warning.message}</span>
+                        </div>,
+                      );
+                    }
                   }
 
                   if (leg.type === 'travel') {
@@ -803,8 +1185,17 @@ export default function RouteEditorPage() {
                     );
                   } else {
                     elements.push(
-                      <LocationLegCard key={`${leg.id}-${leg.accommodation?.total_cost ?? ''}-${leg.accommodation?.cost_per_night ?? ''}`} leg={leg} tripId={tripId!} routeId={routeId!} index={locationIndex++} otherRoutes={otherRoutes} />,
+                      <LocationLegCard
+                        key={`${leg.id}-${leg.accommodation?.total_cost ?? ''}-${leg.accommodation?.cost_per_night ?? ''}`}
+                        leg={leg}
+                        tripId={tripId!}
+                        routeId={routeId!}
+                        index={locationIndex++}
+                        defaultExpanded={leg.id === newlyCreatedLegId}
+                        otherRoutes={otherRoutes}
+                      />,
                     );
+                    prevLocation = leg;
                   }
                 });
 
@@ -818,6 +1209,18 @@ export default function RouteEditorPage() {
               })()}
             </div>
           )}
+
+          <div className="mt-4">
+            <Button
+              onClick={handleAddLocation}
+              disabled={createLeg.isPending}
+              variant="outline"
+              className="w-full border-dashed border-border/60 text-muted-foreground hover:text-foreground"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              {createLeg.isPending ? 'Adding…' : 'Add Location'}
+            </Button>
+          </div>
 
           {legs.length > 0 && (() => {
             const totalOffset = (offsets ?? []).reduce((sum, o) => sum + o.amount, 0);
@@ -857,49 +1260,6 @@ export default function RouteEditorPage() {
           })()}
         </>
       )}
-
-      <div className="mt-4">
-        <Button onClick={() => setAddLocationOpen(true)} variant="outline" className="w-full border-dashed border-border/60 text-muted-foreground hover:text-foreground">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Location
-        </Button>
-        <Dialog open={addLocationOpen} onOpenChange={setAddLocationOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Location</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={addLocationForm.handleSubmit(onAddLocation)} className="space-y-4">
-              <div>
-                <Label htmlFor="loc-name">Location Name</Label>
-                <Input
-                  id="loc-name"
-                  placeholder="e.g. Lisbon, Porto, Sardinia"
-                  {...addLocationForm.register('name', { required: true })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Start Date</Label>
-                  <DatePicker
-                    value={addLocationForm.watch('start_date')}
-                    onChange={(date) => addLocationForm.setValue('start_date', date)}
-                  />
-                </div>
-                <div>
-                  <Label>End Date</Label>
-                  <DatePicker
-                    value={addLocationForm.watch('end_date')}
-                    onChange={(date) => addLocationForm.setValue('end_date', date)}
-                  />
-                </div>
-              </div>
-              <Button type="submit" className="w-full" disabled={createLeg.isPending}>
-                {createLeg.isPending ? 'Adding...' : 'Add Location'}
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
-      </div>
 
       {/* Leg detail dialog (from calendar double-click) */}
       {selectedLegId && (() => {

@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
-import { ArrowLeft, Plus, Trophy, ArrowRight, Plane, Train, Ship, Car, Bus } from 'lucide-react';
+import { ArrowLeft, Plus, Trophy, ArrowRight, Plane, Train, Ship, Car, Bus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useRoutes, useCreateRoute } from '@/hooks/queries/use-routes';
+import { useRoutes, useCreateRoute, useDeleteRoute } from '@/hooks/queries/use-routes';
 import { useCompare, usePickWinner } from '@/hooks/queries/use-compare';
 import { cn } from '@/lib/utils';
 import type { Route, Leg, TransportType } from '@leg-go/shared';
@@ -35,11 +35,14 @@ const routeStatusStyles: Record<string, string> = {
 };
 
 function RouteCard({ route, tripId }: { route: RouteWithLegs; tripId: string }) {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const deleteRoute = useDeleteRoute(tripId);
   const legs = route.legs ?? [];
   const locationLegs = legs.filter((l) => l.type === 'location');
   const travelLegs = legs.filter((l) => l.type === 'travel');
 
   return (
+    <>
     <Link to={`/trips/${tripId}/routes/${route.id}`} className="block group">
       <div className="flex items-center gap-4 py-4 px-5 rounded-xl border border-border/60 bg-card hover:border-primary/30 hover:shadow-sm transition-all">
         <div className="flex-1 min-w-0">
@@ -93,9 +96,48 @@ function RouteCard({ route, tripId }: { route: RouteWithLegs; tripId: string }) 
             )}
           </div>
         </div>
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-8 w-8 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive focus-visible:opacity-100 transition-opacity shrink-0"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setConfirmOpen(true);
+          }}
+          aria-label={`Delete route ${route.name}`}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
         <ArrowRight className="h-4 w-4 text-muted-foreground/40 group-hover:text-primary transition-colors shrink-0" />
       </div>
     </Link>
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete route?</DialogTitle>
+          <DialogDescription>
+            This permanently deletes &ldquo;{route.name}&rdquo; and all of its legs. This can&apos;t be undone.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={deleteRoute.isPending}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={() =>
+              deleteRoute.mutate(route.id, { onSuccess: () => setConfirmOpen(false) })
+            }
+            disabled={deleteRoute.isPending}
+          >
+            {deleteRoute.isPending ? 'Deleting…' : 'Delete'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 

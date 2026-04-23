@@ -1,9 +1,11 @@
-import { Link, useParams } from 'react-router';
-import { Map, Calendar, DollarSign, Users, ArrowLeft, ArrowRight } from 'lucide-react';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router';
+import { Map, Calendar, DollarSign, Users, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { useTrip } from '@/hooks/queries/use-trips';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useTrip, useDeleteTrip } from '@/hooks/queries/use-trips';
 import { cn } from '@/lib/utils';
 
 const statusStyles: Record<string, string> = {
@@ -42,6 +44,9 @@ const navItems = [
 export default function TripDashboardPage() {
   const { tripId } = useParams<{ tripId: string }>();
   const { data: trip, isLoading } = useTrip(tripId!);
+  const deleteTrip = useDeleteTrip();
+  const navigate = useNavigate();
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -73,14 +78,54 @@ export default function TripDashboardPage() {
               </p>
             )}
           </div>
-          <Badge className={cn('capitalize text-sm font-medium', statusStyles[trip.status])}>
-            {trip.status}
-          </Badge>
+          <div className="flex items-center gap-2 shrink-0">
+            <Badge className={cn('capitalize text-sm font-medium', statusStyles[trip.status])}>
+              {trip.status}
+            </Badge>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 text-muted-foreground hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+              aria-label="Delete trip"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
         {trip.description && (
           <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{trip.description}</p>
         )}
       </div>
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete trip?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes &ldquo;{trip.name}&rdquo; along with all its routes, legs, and shared access. This can&apos;t be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={deleteTrip.isPending}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                deleteTrip.mutate(tripId!, {
+                  onSuccess: () => {
+                    setDeleteOpen(false);
+                    navigate('/');
+                  },
+                })
+              }
+              disabled={deleteTrip.isPending}
+            >
+              {deleteTrip.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="space-y-2">
         {navItems.map((item) => {

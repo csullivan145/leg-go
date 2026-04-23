@@ -78,20 +78,25 @@ calendarRoutes.get('/:id/calendar', requireTripAccess('viewer'), async (c) => {
 
   for (const leg of legList) {
     if (leg.type === 'travel') {
-      // Travel appears on departure date (or start_date)
-      const travelDate = leg.start_date ?? leg.departure_time?.split('T')[0] ?? null;
-      if (travelDate) {
-        const entry = getOrCreate(travelDate);
-        entry.travel.push({
-          type: 'travel',
-          transport_type: leg.transport_type,
-          from: leg.departure_location,
-          to: leg.arrival_location,
-          departure_time: leg.departure_time,
-          arrival_time: leg.arrival_time,
-          company: leg.company,
-          cost: leg.cost,
-        });
+      // Travel spans from start_date (departure) to end_date (arrival).
+      // Overnight/multi-day trips (red-eyes, ferries) appear on every day they cross.
+      const startDate = leg.start_date ?? leg.departure_time?.split('T')[0] ?? null;
+      if (startDate) {
+        const endDate = leg.end_date ?? leg.arrival_time?.split('T')[0] ?? startDate;
+        const travelDays = eachDay(startDate, endDate);
+        for (const day of travelDays) {
+          const entry = getOrCreate(day);
+          entry.travel.push({
+            type: 'travel',
+            transport_type: leg.transport_type,
+            from: leg.departure_location,
+            to: leg.arrival_location,
+            departure_time: leg.departure_time,
+            arrival_time: leg.arrival_time,
+            company: leg.company,
+            cost: leg.cost,
+          });
+        }
       }
     } else if (leg.type === 'location') {
       // Location spans from start_date to end_date
@@ -153,10 +158,78 @@ calendarRoutes.get('/:id/calendar', requireTripAccess('viewer'), async (c) => {
     }
   }
 
-  // Sort calendar entries by date
-  const calendar = Array.from(calendarMap.values()).sort((a, b) =>
-    a.date.localeCompare(b.date),
-  );
+  type Event = {
+    type: 'travel' | 'check_in' | 'check_out' | 'day_trip' | 'idea' | 'activity';
+    label: string;
+    status?: string;
+    time?: string;
+    booking_id?: string;
+    company?: string;
+    transport_type?: string | null;
+    cost?: number | null;
+  };
+
+  const calendar = Array.from(calendarMap.values())
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((entry) => {
+      const events: Event[] = [];
+
+      for (const t of entry.travel) {
+        const label =
+          t.from && t.to ? `${t.from} → ${t.to}` : t.from || t.to || 'Travel';
+        events.push({
+          type: 'travel',
+          label,
+          transport_type: t.transport_type,
+          company: t.company ?? undefined,
+          time: t.departure_time ?? undefined,
+          cost: t.cost,
+        });
+      }
+
+      if (entry.accommodation) {
+        if (entry.isArrival && entry.accommodation.check_in_time) {
+          events.push({
+            type: 'check_in',
+            label: `Check in — ${entry.accommodation.name ?? entry.location ?? ''}`.trim(),
+            time: entry.accommodation.check_in_time,
+          });
+        }
+        if (entry.isDeparture && entry.accommodation.check_out_time) {
+          events.push({
+            type: 'check_out',
+            label: `Check out — ${entry.accommodation.name ?? entry.location ?? ''}`.trim(),
+            time: entry.accommodation.check_out_time,
+          });
+        }
+      }
+
+      for (const dt of entry.dayTrips) {
+        events.push({
+          type: dt.status === 'idea' ? 'idea' : 'day_trip',
+          label: dt.destination_name,
+          status: dt.status,
+          transport_type: dt.transport_type,
+          cost: dt.cost,
+        });
+      }
+
+      for (const a of entry.activities) {
+        events.push({
+          type: 'activity',
+          label: a.name,
+          time: a.time ?? undefined,
+          booking_id: a.booking_id ?? undefined,
+        });
+      }
+
+      return {
+        date: entry.date,
+        location: entry.location,
+        is_transition: entry.isArrival && entry.isDeparture,
+        events,
+      };
+    });
 
   return c.json({ calendar, route: { id: winnerRoute.id, name: winnerRoute.name, status: winnerRoute.status } });
 });

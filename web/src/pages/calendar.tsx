@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Plane, Train, Ship, Car, Bus } from 'lucide-react';
 import {
   startOfWeek,
   endOfWeek,
@@ -18,6 +18,14 @@ import { cn } from '@/lib/utils';
 import type { CalendarDay, CalendarEvent } from '@/hooks/queries/use-calendar';
 
 const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+const transportIcons: Record<string, React.ComponentType<{ className?: string }>> = {
+  flight: Plane,
+  train: Train,
+  ferry: Ship,
+  car: Car,
+  bus: Bus,
+};
 
 function eventPillClass(type: CalendarEvent['type'], status?: string): string {
   if (type === 'travel') return 'bg-red-100 text-red-800 border-red-200';
@@ -57,17 +65,21 @@ function CalendarCell({
         <div className="text-xs text-muted-foreground truncate mb-1">{calendarDay.location}</div>
       )}
       <div className="space-y-0.5">
-        {events.slice(0, 3).map((ev, i) => (
-          <div
-            key={i}
-            className={cn(
-              'text-xs px-1.5 py-0.5 rounded border truncate',
-              eventPillClass(ev.type, ev.status),
-            )}
-          >
-            {ev.label}
-          </div>
-        ))}
+        {events.slice(0, 3).map((ev, i) => {
+          const TravelIcon = ev.type === 'travel' && ev.transport_type ? transportIcons[ev.transport_type] : null;
+          return (
+            <div
+              key={i}
+              className={cn(
+                'text-xs px-1.5 py-0.5 rounded border truncate flex items-center gap-1',
+                eventPillClass(ev.type, ev.status),
+              )}
+            >
+              {TravelIcon && <TravelIcon className="h-3 w-3 shrink-0" />}
+              <span className="truncate">{ev.label}</span>
+            </div>
+          );
+        })}
         {events.length > 3 && (
           <div className="text-xs text-muted-foreground pl-1">+{events.length - 3} more</div>
         )}

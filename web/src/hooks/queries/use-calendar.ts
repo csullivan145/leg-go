@@ -13,6 +13,8 @@ export interface CalendarEvent {
   duration?: string;
   amenities?: string[];
   address?: string;
+  transport_type?: 'flight' | 'train' | 'ferry' | 'car' | 'bus' | null;
+  cost?: number | null;
 }
 
 export interface CalendarDay {
