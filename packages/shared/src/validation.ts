@@ -51,6 +51,9 @@ export const updateLegSchema = createLegSchema.partial().omit({ type: true });
 export const upsertAccommodationSchema = z.object({
   name: z.string().max(200).nullable().optional(),
   address: z.string().max(500).nullable().optional(),
+  lat: z.number().nullable().optional(),
+  lng: z.number().nullable().optional(),
+  place_id: z.string().max(200).nullable().optional(),
   cost_per_night: z.number().nullable().optional(),
   total_cost: z.number().nullable().optional(),
   check_in_time: z.string().nullable().optional(),

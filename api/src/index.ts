@@ -38,6 +38,10 @@ app.route('/auth', authRoutes);
 
 // Protected routes
 app.use('/api/*', authMiddleware);
+
+// Client-exposable config (API keys safe for browser use, e.g. referrer-restricted)
+app.get('/api/config', (c) => c.json({ googleMapsApiKey: c.env.GOOGLE_MAPS_API_KEY ?? null }));
+
 app.route('/api/trips', tripRoutes);
 
 // Route CRUD (nested under trips)

@@ -34,6 +34,7 @@ import { useOffsets } from '@/hooks/queries/use-offsets';
 import { useTrip } from '@/hooks/queries/use-trips';
 import { RouteTimeline } from '@/components/route-timeline';
 import { CurrencyConverter } from '@/components/currency-converter';
+import { PlaceAutocomplete } from '@/components/place-autocomplete';
 import {
   useCreateLeg,
   useUpdateLeg,
@@ -606,6 +607,9 @@ function LocationLegCard({
     defaultValues: {
       name: leg.accommodation?.name ?? '',
       address: leg.accommodation?.address ?? '',
+      lat: leg.accommodation?.lat ?? null,
+      lng: leg.accommodation?.lng ?? null,
+      place_id: leg.accommodation?.place_id ?? null,
       cost_per_night: leg.accommodation?.cost_per_night ?? '',
       total_cost: leg.accommodation?.total_cost ?? '',
       check_in_time: leg.accommodation?.check_in_time ?? '',
@@ -642,6 +646,9 @@ function LocationLegCard({
       legId: leg.id,
       name: values.name || null,
       address: values.address || null,
+      lat: (values.lat as number | null) ?? null,
+      lng: (values.lng as number | null) ?? null,
+      place_id: (values.place_id as string | null) ?? null,
       cost_per_night: costPerNight,
       total_cost: totalCost,
       check_in_time: values.check_in_time || null,
@@ -743,7 +750,20 @@ function LocationLegCard({
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">Name</Label>
-                      <Input className="h-8 text-sm" placeholder="Airbnb / Hotel name" {...accForm.register('name')} />
+                      <PlaceAutocomplete
+                        className="h-8 text-sm"
+                        placeholder="Airbnb / Hotel name"
+                        value={accForm.watch('name') ?? ''}
+                        onChange={(v) => accForm.setValue('name', v, { shouldDirty: true })}
+                        onSelect={(place) => {
+                          accForm.setValue('name', place.name, { shouldDirty: true });
+                          accForm.setValue('address', place.address, { shouldDirty: true });
+                          accForm.setValue('lat', place.lat, { shouldDirty: true });
+                          accForm.setValue('lng', place.lng, { shouldDirty: true });
+                          accForm.setValue('place_id', place.place_id, { shouldDirty: true });
+                        }}
+                        bias={leg.name ?? undefined}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs">Address</Label>

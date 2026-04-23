@@ -65,6 +65,9 @@ export interface Accommodation {
   leg_id: string;
   name: string | null;
   address: string | null;
+  lat: number | null;
+  lng: number | null;
+  place_id: string | null;
   cost_per_night: number | null;
   total_cost: number | null;
   check_in_time: string | null;
