@@ -15,6 +15,13 @@
       "when": 1777708800000,
       "tag": "0001_add_accommodations_geo",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1777795200000,
+      "tag": "0002_add_legs_geo",
+      "breakpoints": true
     }
   ]
 }

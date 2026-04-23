@@ -16,6 +16,7 @@ import {
   CalendarDays,
   Copy,
   AlertTriangle,
+  Map,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { format, parseISO, differenceInDays } from 'date-fns';
@@ -35,6 +36,7 @@ import { useTrip } from '@/hooks/queries/use-trips';
 import { RouteTimeline } from '@/components/route-timeline';
 import { CurrencyConverter } from '@/components/currency-converter';
 import { PlaceAutocomplete } from '@/components/place-autocomplete';
+import { RouteMap } from '@/components/route-map';
 import {
   useCreateLeg,
   useUpdateLeg,
@@ -600,6 +602,9 @@ function LocationLegCard({
       start_date: leg.start_date ?? '',
       end_date: leg.end_date ?? '',
       notes: leg.notes ?? '',
+      lat: leg.lat ?? null,
+      lng: leg.lng ?? null,
+      place_id: leg.place_id ?? null,
     },
   });
 
@@ -672,11 +677,17 @@ function LocationLegCard({
             <div className="flex-1 min-w-0">
               {expanded ? (
                 <>
-                  <Input
-                    autoFocus={defaultExpanded}
-                    placeholder="Location name"
+                  <PlaceAutocomplete
                     className="h-8 text-base font-semibold"
-                    {...legForm.register('name')}
+                    placeholder="Location name"
+                    value={legForm.watch('name') ?? ''}
+                    onChange={(v) => legForm.setValue('name', v, { shouldDirty: true })}
+                    onSelect={(place) => {
+                      legForm.setValue('name', place.name, { shouldDirty: true });
+                      legForm.setValue('lat', place.lat, { shouldDirty: true });
+                      legForm.setValue('lng', place.lng, { shouldDirty: true });
+                      legForm.setValue('place_id', place.place_id, { shouldDirty: true });
+                    }}
                   />
                   <div className="flex flex-wrap items-center gap-2 mt-1">
                     <div className="w-36">
@@ -996,7 +1007,7 @@ export default function RouteEditorPage() {
   const deleteRoute = useDeleteRoute(tripId!);
   const navigate = useNavigate();
   const otherRoutes = (allRoutes ?? []).filter((r: { id: string }) => r.id !== routeId).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }));
-  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list');
+  const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'map'>('list');
   const [selectedLegId, setSelectedLegId] = useState<string | null>(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [newlyCreatedLegId, setNewlyCreatedLegId] = useState<string | null>(null);
@@ -1063,6 +1074,14 @@ export default function RouteEditorPage() {
             >
               <CalendarDays className="h-4 w-4" />
             </Button>
+            <Button
+              variant={viewMode === 'map' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-7 px-2"
+              onClick={() => setViewMode('map')}
+            >
+              <Map className="h-4 w-4" />
+            </Button>
           </div>
           <Button
             variant="ghost"
@@ -1125,6 +1144,12 @@ export default function RouteEditorPage() {
           <p>Set trip start and end dates to use the timeline view.</p>
         </div>
       ) : null}
+
+      {viewMode === 'map' && (
+        <div className="mb-8">
+          <RouteMap legs={legs} onSelectLeg={(legId) => setSelectedLegId(legId)} />
+        </div>
+      )}
 
       {viewMode === 'list' && (
         <>

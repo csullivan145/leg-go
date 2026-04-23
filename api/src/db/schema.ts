@@ -57,6 +57,9 @@ export const legs = sqliteTable('legs', {
   arrival_time: text('arrival_time'),
   departure_location: text('departure_location'),
   arrival_location: text('arrival_location'),
+  lat: real('lat'),
+  lng: real('lng'),
+  place_id: text('place_id'),
   notes: text('notes'),
 });
 

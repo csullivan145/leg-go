@@ -44,6 +44,9 @@ export const createLegSchema = z.object({
   arrival_location: z.string().max(200).nullable().optional(),
   notes: z.string().max(2000).nullable().optional(),
   order: z.number().int().min(0).optional(),
+  lat: z.number().nullable().optional(),
+  lng: z.number().nullable().optional(),
+  place_id: z.string().max(200).nullable().optional(),
 });
 
 export const updateLegSchema = createLegSchema.partial().omit({ type: true });
