@@ -761,6 +761,7 @@ function LocationLegCard({
                 <div className="space-y-3">
                   <BookingDrop
                     onExtracted={(data: BookingDropResult) => {
+                      if (data.city) legForm.setValue('name', data.city, { shouldDirty: true });
                       if (data.name) accForm.setValue('name', data.name, { shouldDirty: true });
                       if (data.address) accForm.setValue('address', data.address, { shouldDirty: true });
                       if (data.check_in_time) accForm.setValue('check_in_time', data.check_in_time, { shouldDirty: true });

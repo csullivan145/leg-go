@@ -116,6 +116,61 @@ legRoutes.patch('/legs/:legId', requireTripAccess('editor'), async (c) => {
     : leg.nights;
 
   await db.update(legs).set({ ...body, nights }).where(eq(legs.id, legId));
+
+  // Auto-reorder: if a location's start_date changed, resort location legs by
+  // date. Travel legs stay attached to the location immediately after them
+  // (the "Home -> X" or "X -> Y" they represent), and trailing travel after
+  // the last location stays at the end.
+  if (leg.type === 'location' && body.start_date !== undefined) {
+    const allLegs = await db
+      .select()
+      .from(legs)
+      .where(eq(legs.route_id, leg.route_id));
+    allLegs.sort((a, b) => a.order - b.order);
+
+    type Block = { travelBefore: typeof allLegs; location: (typeof allLegs)[number] };
+    const blocks: Block[] = [];
+    let pendingTravel: typeof allLegs = [];
+    for (const l of allLegs) {
+      if (l.type === 'travel') {
+        pendingTravel.push(l);
+      } else {
+        blocks.push({ travelBefore: pendingTravel, location: l });
+        pendingTravel = [];
+      }
+    }
+    const trailingTravel = pendingTravel;
+
+    blocks.sort((a, b) => {
+      const as = a.location.start_date;
+      const bs = b.location.start_date;
+      if (!as && !bs) return 0;
+      if (!as) return 1;
+      if (!bs) return -1;
+      return as.localeCompare(bs);
+    });
+
+    let nextOrder = 0;
+    for (const block of blocks) {
+      for (const t of block.travelBefore) {
+        if (t.order !== nextOrder) {
+          await db.update(legs).set({ order: nextOrder }).where(eq(legs.id, t.id));
+        }
+        nextOrder++;
+      }
+      if (block.location.order !== nextOrder) {
+        await db.update(legs).set({ order: nextOrder }).where(eq(legs.id, block.location.id));
+      }
+      nextOrder++;
+    }
+    for (const t of trailingTravel) {
+      if (t.order !== nextOrder) {
+        await db.update(legs).set({ order: nextOrder }).where(eq(legs.id, t.id));
+      }
+      nextOrder++;
+    }
+  }
+
   const updated = await db.select().from(legs).where(eq(legs.id, legId)).get();
   return c.json({ leg: updated });
 });

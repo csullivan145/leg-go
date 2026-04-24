@@ -6,6 +6,7 @@ const parseRoutes = new Hono<{ Bindings: Env }>();
 
 interface ExtractedBooking {
   name: string | null;
+  city: string | null;
   address: string | null;
   check_in_date: string | null;
   check_out_date: string | null;
@@ -20,6 +21,7 @@ interface ExtractedBooking {
 
 const EMPTY: ExtractedBooking = {
   name: null,
+  city: null,
   address: null,
   check_in_date: null,
   check_out_date: null,
@@ -32,11 +34,13 @@ const EMPTY: ExtractedBooking = {
   nights: null,
 };
 
-const EXTRACTION_PROMPT = `You are parsing a booking confirmation (hotel, Airbnb, or similar). Extract the fields below and return ONLY a JSON object, no other text, no code fences.
+function buildExtractionPrompt(currentYear: number): string {
+  return `You are parsing a booking confirmation (hotel, Airbnb, or similar). Extract the fields below and return ONLY a JSON object, no other text, no code fences.
 
 Required shape (use null for any field you cannot find):
 {
   "name": string | null,
+  "city": string | null,
   "address": string | null,
   "check_in_date": string | null,
   "check_out_date": string | null,
@@ -51,11 +55,14 @@ Required shape (use null for any field you cannot find):
 
 Rules:
 - Dates must be YYYY-MM-DD.
+- If the source shows a date without a year (e.g. "Jun 30" or "June 30 – Jul 4"), assume the year is ${currentYear}. If the check-out month is earlier than the check-in month, the check-out date is ${currentYear + 1}.
 - Times must be 24-hour HH:MM.
 - total_cost and cost_per_night are numbers (strip currency symbols).
 - name is the property or hotel name (e.g. "Hotel Lisboa" or "Sunny apartment in Alfama").
+- city is the city the property is in (e.g. "Lisbon", "Paris"). Derive from the address if needed.
 - booking_id is a reservation / confirmation code.
 - Return only the JSON object.`;
+}
 
 function extractJson(text: string): Partial<ExtractedBooking> {
   if (!text) return {};
@@ -74,7 +81,7 @@ function extractJson(text: string): Partial<ExtractedBooking> {
 async function extractFromImage(ai: Env['AI'], bytes: Uint8Array): Promise<string> {
   const image = Array.from(bytes);
   const res = (await ai.run('@cf/meta/llama-3.2-11b-vision-instruct', {
-    prompt: EXTRACTION_PROMPT,
+    prompt: buildExtractionPrompt(new Date().getUTCFullYear()),
     image,
     max_tokens: 512,
   } as never)) as { response?: string; description?: string };
@@ -89,7 +96,7 @@ async function extractFromPdf(ai: Env['AI'], bytes: Uint8Array): Promise<string>
 
   const res = (await ai.run('@cf/meta/llama-3.1-8b-instruct', {
     messages: [
-      { role: 'system', content: EXTRACTION_PROMPT },
+      { role: 'system', content: buildExtractionPrompt(new Date().getUTCFullYear()) },
       { role: 'user', content: truncated },
     ],
     max_tokens: 512,

@@ -1,9 +1,18 @@
-import { useRef, useState } from 'react';
-import { Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Upload, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+const LOADING_MESSAGES = [
+  'Reading the document…',
+  'Looking for dates…',
+  'Pulling out the address…',
+  'Finding the booking total…',
+  'Almost done…',
+];
 
 export interface BookingDropResult {
   name?: string | null;
+  city?: string | null;
   address?: string | null;
   check_in_date?: string | null;
   check_out_date?: string | null;
@@ -25,7 +34,19 @@ export function BookingDrop({ onExtracted, className }: BookingDropProps) {
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messageIdx, setMessageIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!loading) {
+      setMessageIdx(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      setMessageIdx((i) => (i + 1) % LOADING_MESSAGES.length);
+    }, 1400);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   async function upload(file: File) {
     const isImage = file.type.startsWith('image/');
@@ -60,11 +81,11 @@ export function BookingDrop({ onExtracted, className }: BookingDropProps) {
   return (
     <div
       className={cn(
-        'rounded-md border-2 border-dashed px-3 py-3 text-center transition-colors cursor-pointer',
+        'relative overflow-hidden rounded-md border-2 border-dashed px-3 py-3 text-center transition-colors cursor-pointer',
         dragging
           ? 'border-primary bg-primary/5'
           : 'border-border/60 hover:border-primary/40 hover:bg-muted/30',
-        loading && 'pointer-events-none opacity-70',
+        loading && 'pointer-events-none border-primary/60 bg-primary/5',
         className,
       )}
       onDragOver={(e) => {
@@ -91,13 +112,27 @@ export function BookingDrop({ onExtracted, className }: BookingDropProps) {
           e.target.value = '';
         }}
       />
-      <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <Upload className="h-3.5 w-3.5" />
-        {loading
-          ? 'Extracting booking details…'
-          : 'Drop a booking confirmation (image or PDF) to fill these fields'}
+      {loading && (
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-transparent via-primary/15 to-transparent bg-[length:200%_100%] animate-[shimmer_1.8s_linear_infinite]" />
+      )}
+      <div className="relative flex items-center justify-center gap-2 text-xs">
+        {loading ? (
+          <>
+            <Sparkles className="h-3.5 w-3.5 text-primary animate-pulse" />
+            <span className="text-foreground font-medium tabular-nums">
+              {LOADING_MESSAGES[messageIdx]}
+            </span>
+          </>
+        ) : (
+          <>
+            <Upload className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-muted-foreground">
+              Drop a booking confirmation (image or PDF) to fill these fields
+            </span>
+          </>
+        )}
       </div>
-      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
+      {error && <p className="relative text-xs text-destructive mt-1">{error}</p>}
     </div>
   );
 }
