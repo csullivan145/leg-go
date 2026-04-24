@@ -117,6 +117,45 @@ function getLocationDateWarning(
   return null;
 }
 
+function getTravelDateWarning(
+  travel: { name?: string | null; start_date?: string | null; end_date?: string | null },
+  prev: { name?: string | null; end_date?: string | null } | null,
+  next: { name?: string | null; start_date?: string | null } | null,
+): { message: string } | null {
+  if (!travel.start_date) return null;
+  const travelName = travel.name || 'Travel';
+  if (prev?.end_date && travel.start_date !== prev.end_date) {
+    const diff = differenceInDays(parseISO(travel.start_date), parseISO(prev.end_date));
+    const prevName = prev.name || 'the previous stop';
+    if (diff > 0) {
+      return {
+        message: `${travelName} departs ${diff} day${diff === 1 ? '' : 's'} after ${prevName} ends`,
+      };
+    }
+    if (diff < 0) {
+      return {
+        message: `${travelName} departs before ${prevName} ends`,
+      };
+    }
+  }
+  const arrivalDate = travel.end_date ?? travel.start_date;
+  if (next?.start_date && arrivalDate && arrivalDate !== next.start_date) {
+    const diff = differenceInDays(parseISO(next.start_date), parseISO(arrivalDate));
+    const nextName = next.name || 'the next stop';
+    if (diff > 0) {
+      return {
+        message: `${travelName} arrives ${diff} day${diff === 1 ? '' : 's'} before ${nextName} begins`,
+      };
+    }
+    if (diff < 0) {
+      return {
+        message: `${travelName} arrives after ${nextName} begins`,
+      };
+    }
+  }
+  return null;
+}
+
 interface LegWithDetails extends Leg {
   accommodation?: Accommodation | null;
   day_trips?: DayTrip[];
@@ -1434,6 +1473,25 @@ export default function RouteEditorPage() {
                         confirmedMode={route.status === 'winner'}
                       />,
                     );
+                    const nextLoc = sorted.slice(i + 1).find((l) => l.type === 'location') as LegWithDetails | undefined;
+                    const travelWarning = getTravelDateWarning(leg, prevLocation, nextLoc ?? null);
+                    if (travelWarning) {
+                      const TransportIcon = leg.transport_type ? transportIcons[leg.transport_type] : null;
+                      elements.push(
+                        <div
+                          key={`travel-warn-${leg.id}`}
+                          className={cn(
+                            'mx-1 my-2 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm',
+                            'border-yellow-500/40 bg-yellow-400/15 text-yellow-900 dark:text-yellow-200',
+                          )}
+                          role="alert"
+                        >
+                          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                          {TransportIcon && <TransportIcon className="h-4 w-4 mt-0.5 shrink-0" />}
+                          <span className="leading-snug">{travelWarning.message}</span>
+                        </div>,
+                      );
+                    }
                   } else {
                     elements.push(
                       <LocationLegCard

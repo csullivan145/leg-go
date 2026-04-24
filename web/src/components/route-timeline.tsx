@@ -264,9 +264,10 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
         return slot;
       };
 
+      // Travel slotted first so it always occupies the top slot(s).
+      const slottedTravel = visibleTravel.map((tv) => ({ ...tv, slot: assignSlot(tv.startCol, tv.endCol) }));
       const slottedEvents = visibleEvents.map((ev) => ({ ...ev, slot: assignSlot(ev.startCol, ev.endCol) }));
       const slottedDayTrips = visibleDayTrips.map((dt) => ({ ...dt, slot: assignSlot(dt.col, dt.col) }));
-      const slottedTravel = visibleTravel.map((tv) => ({ ...tv, slot: assignSlot(tv.startCol, tv.endCol) }));
 
       const maxSlots = slotEnds.length;
 
@@ -559,9 +560,11 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
               })}
               {/* Travel markers — one- or multi-day bars with transport icon */}
               {travel.map((tv) => {
-                if (tv.endCol < 0 || tv.startCol > 6) return null;
-                const clippedStart = Math.max(0, tv.startCol);
-                const clippedEnd = Math.min(6, tv.endCol);
+                const isDraggingThis = dragging?.id === tv.travel.leg.id;
+                const adjusted = getDragAdjusted(tv.travel.leg.id, tv.startCol, tv.endCol);
+                if (adjusted.endCol < 0 || adjusted.startCol > 6) return null;
+                const clippedStart = Math.max(0, adjusted.startCol);
+                const clippedEnd = Math.min(6, adjusted.endCol);
                 const leftPct = (clippedStart / 7) * 100;
                 const widthPct = ((clippedEnd - clippedStart + 1) / 7) * 100;
                 const Icon = tv.travel.leg.transport_type
@@ -571,20 +574,41 @@ export function RouteTimeline({ legs, tripStartDate, tripEndDate, onUpdateLeg, o
                   <div
                     key={tv.travel.id}
                     className={cn(
-                      'absolute flex items-center gap-1 text-[10px] font-medium pointer-events-auto border-2 border-foreground/40 bg-foreground text-background hover:bg-foreground/90 z-20 cursor-pointer',
+                      'absolute flex items-center gap-1 text-[10px] font-medium pointer-events-auto border-2 border-foreground/40 bg-foreground text-background hover:bg-foreground/90 z-20',
                       tv.continues_before ? 'rounded-l-none border-l-0' : 'rounded-l-md',
                       tv.continues_after ? 'rounded-r-none border-r-0' : 'rounded-r-md',
+                      isDraggingThis ? 'opacity-90 shadow-lg ring-2 ring-white/50 z-30' : 'hover:brightness-110',
                     )}
                     style={{
                       left: `calc(${leftPct}% + 3px)`,
                       width: `calc(${widthPct}% - 6px)`,
                       top: tv.slot * (EVENT_HEIGHT + EVENT_GAP),
                       height: EVENT_HEIGHT - 2,
+                      cursor: dragging ? 'grabbing' : 'grab',
                     }}
                     title={tv.travel.leg.name ?? 'Travel'}
-                    onClick={(e) => {
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
                       e.stopPropagation();
                       onSelectLeg?.(tv.travel.leg.id);
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault();
+                      const cell = containerRef.current?.querySelector('.grid.grid-cols-7 + .grid > div') as HTMLElement;
+                      const cellWidth = cell ? cell.offsetWidth : 100;
+                      const weekRow = (e.currentTarget.closest('.grid.grid-cols-7') as HTMLElement);
+                      const cellHeight = weekRow ? weekRow.offsetHeight : 100;
+                      setDragging({
+                        type: 'leg',
+                        id: tv.travel.leg.id,
+                        mode: 'move',
+                        startX: e.clientX,
+                        startY: e.clientY,
+                        origStart: tv.travel.start,
+                        origEnd: tv.travel.end,
+                        cellWidth,
+                        cellHeight,
+                      });
                     }}
                   >
                     {Icon && <Icon className="h-3 w-3 ml-1 shrink-0" />}
