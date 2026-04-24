@@ -20,5 +20,9 @@ migrations_dir = "api/drizzle/migrations"
 [ai]
 binding = "AI"
 
+[[routes]]
+pattern = "leg-go.csullivan.me"
+custom_domain = true
+
 [vars]
-FRONTEND_URL = "https://leg-go.csullivan.workers.dev"
+FRONTEND_URL = "https://leg-go.csullivan.me"

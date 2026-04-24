@@ -1,13 +1,14 @@
 import { useEffect, useRef } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
-import { Plane, Train, Ship, Car, Bus } from 'lucide-react';
+import { Plane, Train, Ship, Car, Bus, Bed } from 'lucide-react';
 import { useConfig } from '@/hooks/queries/use-config';
-import type { Leg, TransportType } from '@leg-go/shared';
+import type { Leg, Accommodation, TransportType } from '@leg-go/shared';
 
 interface LegWithGeo extends Leg {
   lat: number | null;
   lng: number | null;
+  accommodation?: Accommodation | null;
 }
 
 interface RouteMapProps {
@@ -112,6 +113,30 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
         strokeWeight: 3,
         map: mapRef.current!,
       });
+
+      // Accommodation pins — one per location leg with a geocoded hotel
+      for (const leg of locationLegs) {
+        const acc = leg.accommodation;
+        if (!acc || acc.lat == null || acc.lng == null) continue;
+        const position = { lat: acc.lat, lng: acc.lng };
+        bounds.extend(position);
+
+        const pin = document.createElement('div');
+        pin.className =
+          'h-6 w-6 rounded-full bg-background border-2 border-primary/60 flex items-center justify-center shadow cursor-pointer';
+        const root = createRoot(pin);
+        root.render(<Bed className="h-3 w-3 text-primary" />);
+        rootsRef.current.push(root);
+
+        const marker = new AdvancedMarkerElement({
+          map: mapRef.current!,
+          position,
+          content: pin,
+          title: acc.name ?? leg.name ?? 'Accommodation',
+        });
+        marker.addListener('click', () => onSelectLeg?.(leg.id));
+        markersRef.current.push(marker);
+      }
 
       // Midpoint transport icons — one per consecutive-location pair
       for (let i = 0; i < locationLegs.length - 1; i++) {
