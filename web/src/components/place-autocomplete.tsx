@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { useConfig } from '@/hooks/queries/use-config';
@@ -41,77 +41,76 @@ export function PlaceAutocomplete({
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(-1);
-  const skipNextFetch = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    if (!apiKey) return;
-    if (skipNextFetch.current) {
-      skipNextFetch.current = false;
-      return;
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-
-    const q = value.trim();
-    if (q.length < 2) {
-      setSuggestions([]);
-      setOpen(false);
-      return;
-    }
-
-    debounceRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Goog-Api-Key': apiKey,
-          },
-          body: JSON.stringify({
-            input: bias ? `${q} ${bias}` : q,
-            includeQueryPredictions: false,
-          }),
-        });
-        if (!res.ok) {
-          setSuggestions([]);
-          return;
-        }
-        const data = (await res.json()) as {
-          suggestions?: Array<{
-            placePrediction?: {
-              placeId: string;
-              structuredFormat?: {
-                mainText?: { text: string };
-                secondaryText?: { text: string };
-              };
-              text?: { text: string };
-            };
-          }>;
-        };
-        const items: Suggestion[] = (data.suggestions ?? [])
-          .map((s) => s.placePrediction)
-          .filter((p): p is NonNullable<typeof p> => !!p)
-          .map((p) => ({
-            placeId: p.placeId,
-            mainText: p.structuredFormat?.mainText?.text ?? p.text?.text ?? '',
-            secondaryText: p.structuredFormat?.secondaryText?.text ?? '',
-          }));
-        setSuggestions(items);
-        setOpen(items.length > 0);
-        setActiveIdx(-1);
-      } catch {
-        setSuggestions([]);
-      }
-    }, 250);
-
-    return () => {
+  const fetchSuggestions = useCallback(
+    (input: string) => {
+      if (!apiKey) return;
       if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
-  }, [value, bias, apiKey]);
+
+      const q = input.trim();
+      if (q.length < 2) {
+        setSuggestions([]);
+        setOpen(false);
+        return;
+      }
+
+      debounceRef.current = setTimeout(async () => {
+        try {
+          const res = await fetch('https://places.googleapis.com/v1/places:autocomplete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Goog-Api-Key': apiKey,
+            },
+            body: JSON.stringify({
+              input: bias ? `${q} ${bias}` : q,
+              includeQueryPredictions: false,
+            }),
+          });
+          if (!res.ok) {
+            setSuggestions([]);
+            return;
+          }
+          const data = (await res.json()) as {
+            suggestions?: Array<{
+              placePrediction?: {
+                placeId: string;
+                structuredFormat?: {
+                  mainText?: { text: string };
+                  secondaryText?: { text: string };
+                };
+                text?: { text: string };
+              };
+            }>;
+          };
+          const items: Suggestion[] = (data.suggestions ?? [])
+            .map((s) => s.placePrediction)
+            .filter((p): p is NonNullable<typeof p> => !!p)
+            .map((p) => ({
+              placeId: p.placeId,
+              mainText: p.structuredFormat?.mainText?.text ?? p.text?.text ?? '',
+              secondaryText: p.structuredFormat?.secondaryText?.text ?? '',
+            }));
+          setSuggestions(items);
+          setOpen(items.length > 0);
+          setActiveIdx(-1);
+        } catch {
+          setSuggestions([]);
+        }
+      }, 250);
+    },
+    [apiKey, bias],
+  );
+
+  const handleChange = (next: string) => {
+    onChange(next);
+    fetchSuggestions(next);
+  };
 
   const pick = async (suggestion: Suggestion) => {
     if (!apiKey) return;
-    skipNextFetch.current = true;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     setOpen(false);
     setSuggestions([]);
 
@@ -163,8 +162,7 @@ export function PlaceAutocomplete({
         className={className}
         placeholder={placeholder}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onFocus={() => suggestions.length > 0 && setOpen(true)}
+        onChange={(e) => handleChange(e.target.value)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         onKeyDown={(e) => {
           if (!open) return;

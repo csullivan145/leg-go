@@ -441,7 +441,7 @@ function TravelLegCard({
   };
 
   return (
-    <div className="relative flex justify-center my-1">
+    <div className="relative flex justify-center my-2 pl-11">
       <div
         className={cn(
           'flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer text-sm transition-all',
@@ -672,7 +672,7 @@ function LocationLegCard({
           </div>
           <div className="w-px bg-border/60 flex-1 min-h-4" />
         </div>
-        <div className="flex-1 mb-2 py-3 px-4 rounded-xl border border-border/60 bg-card">
+        <div className="flex-1 py-3 px-4 rounded-xl border border-border/60 bg-card">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               {expanded ? (
@@ -982,6 +982,7 @@ function LocationLegCard({
                   onClick={async () => {
                     await legForm.handleSubmit(onSaveLeg)();
                     await accForm.handleSubmit(onSaveAccommodation)();
+                    setExpanded(false);
                   }}
                 >
                   {updateLeg.isPending || upsertAccommodation.isPending ? 'Saving…' : 'Save'}
@@ -1167,7 +1168,7 @@ export default function RouteEditorPage() {
 
                 const addPlaceholder = (key: string, label: string, insertOrder: number, startDate?: string | null, endDate?: string | null) => {
                   elements.push(
-                    <div key={key} className="relative flex justify-center my-1">
+                    <div key={key} className="relative flex justify-center my-2 pl-11">
                       <button
                         className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-dashed border-muted-foreground/30 bg-muted/10 text-sm text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-all cursor-pointer"
                         onClick={async () => {

@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { setOptions, importLibrary } from '@googlemaps/js-api-loader';
+import { Plane, Train, Ship, Car, Bus } from 'lucide-react';
 import { useConfig } from '@/hooks/queries/use-config';
-import type { Leg } from '@leg-go/shared';
+import type { Leg, TransportType } from '@leg-go/shared';
 
 interface LegWithGeo extends Leg {
   lat: number | null;
@@ -13,6 +15,14 @@ interface RouteMapProps {
   onSelectLeg?: (legId: string) => void;
 }
 
+const transportIcons: Record<TransportType, React.ComponentType<{ className?: string }>> = {
+  flight: Plane,
+  train: Train,
+  ferry: Ship,
+  car: Car,
+  bus: Bus,
+};
+
 export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
   const { data: config } = useConfig();
   const apiKey = config?.googleMapsApiKey ?? null;
@@ -20,10 +30,12 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
   const polylineRef = useRef<google.maps.Polyline | null>(null);
+  const rootsRef = useRef<Root[]>([]);
 
-  const locationLegs = legs
-    .filter((l) => l.type === 'location' && l.lat != null && l.lng != null)
-    .sort((a, b) => a.order - b.order);
+  const sortedLegs = [...legs].sort((a, b) => a.order - b.order);
+  const locationLegs = sortedLegs.filter(
+    (l) => l.type === 'location' && l.lat != null && l.lng != null,
+  );
 
   useEffect(() => {
     if (!apiKey || !containerRef.current) return;
@@ -55,9 +67,11 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
         });
       }
 
-      // Clear previous markers / polyline
+      // Clear previous markers / polyline / react roots
       for (const m of markersRef.current) m.map = null;
       markersRef.current = [];
+      for (const r of rootsRef.current) r.unmount();
+      rootsRef.current = [];
       if (polylineRef.current) polylineRef.current.setMap(null);
       polylineRef.current = null;
 
@@ -66,6 +80,7 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
       const bounds = new LatLngBounds();
       const path: google.maps.LatLngLiteral[] = [];
 
+      // Location pins — numbered
       locationLegs.forEach((leg, i) => {
         if (leg.lat == null || leg.lng == null) return;
         const position = { lat: leg.lat, lng: leg.lng };
@@ -88,6 +103,7 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
         markersRef.current.push(marker);
       });
 
+      // Connecting polyline in route order
       polylineRef.current = new Polyline({
         path,
         geodesic: true,
@@ -96,6 +112,42 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
         strokeWeight: 3,
         map: mapRef.current!,
       });
+
+      // Midpoint transport icons — one per consecutive-location pair
+      for (let i = 0; i < locationLegs.length - 1; i++) {
+        const from = locationLegs[i];
+        const to = locationLegs[i + 1];
+        if (from.lat == null || from.lng == null || to.lat == null || to.lng == null) continue;
+
+        const travel = sortedLegs.find(
+          (l) => l.type === 'travel' && l.order > from.order && l.order < to.order,
+        );
+        if (!travel?.transport_type) continue;
+
+        const Icon = transportIcons[travel.transport_type];
+        if (!Icon) continue;
+
+        const midDiv = document.createElement('div');
+        midDiv.className =
+          'h-7 w-7 rounded-full bg-background border-2 border-primary flex items-center justify-center shadow cursor-pointer';
+        const root = createRoot(midDiv);
+        root.render(<Icon className="h-3.5 w-3.5 text-primary" />);
+        rootsRef.current.push(root);
+
+        const mid = {
+          lat: (from.lat + to.lat) / 2,
+          lng: (from.lng + to.lng) / 2,
+        };
+
+        const marker = new AdvancedMarkerElement({
+          map: mapRef.current!,
+          position: mid,
+          content: midDiv,
+          title: travel.name ?? undefined,
+        });
+        marker.addListener('click', () => onSelectLeg?.(travel.id));
+        markersRef.current.push(marker);
+      }
 
       if (locationLegs.length === 1) {
         mapRef.current!.setCenter(path[0]);
@@ -108,7 +160,7 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
     return () => {
       cancelled = true;
     };
-  }, [apiKey, locationLegs, onSelectLeg]);
+  }, [apiKey, locationLegs, sortedLegs, onSelectLeg]);
 
   if (!apiKey) {
     return (
