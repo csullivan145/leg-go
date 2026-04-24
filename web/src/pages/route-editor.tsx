@@ -519,7 +519,7 @@ function TravelLegCard({
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+            <div className="space-y-3">
               <fieldset disabled={locked} className="contents">
               <BookingDrop
                 onExtracted={(data) => {
@@ -683,12 +683,17 @@ function TravelLegCard({
                   {locked ? 'Close' : 'Cancel'}
                 </Button>
                 {!locked && (
-                  <Button type="submit" size="sm" disabled={updateLeg.isPending}>
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={updateLeg.isPending}
+                    onClick={() => handleSubmit(onSubmit)()}
+                  >
                     Save
                   </Button>
                 )}
               </div>
-            </form>
+            </div>
           </CardContent>
         </Card>
       )}
