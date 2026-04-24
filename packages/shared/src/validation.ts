@@ -47,6 +47,10 @@ export const createLegSchema = z.object({
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
   place_id: z.string().max(200).nullable().optional(),
+  departure_lat: z.number().nullable().optional(),
+  departure_lng: z.number().nullable().optional(),
+  arrival_lat: z.number().nullable().optional(),
+  arrival_lng: z.number().nullable().optional(),
   purchased: z.boolean().optional(),
 });
 

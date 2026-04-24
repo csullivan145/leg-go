@@ -36,6 +36,13 @@
       "when": 1777968000000,
       "tag": "0004_add_leg_payments",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1778054400000,
+      "tag": "0005_add_legs_travel_coords",
+      "breakpoints": true
     }
   ]
 }

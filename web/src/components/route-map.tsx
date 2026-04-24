@@ -81,7 +81,7 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
       const bounds = new LatLngBounds();
       const path: google.maps.LatLngLiteral[] = [];
 
-      // Location pins — numbered
+      // Build the polyline path: city -> (departure airport) -> (arrival airport) -> next city ...
       locationLegs.forEach((leg, i) => {
         if (leg.lat == null || leg.lng == null) return;
         const position = { lat: leg.lat, lng: leg.lng };
@@ -102,6 +102,26 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
         });
         marker.addListener('click', () => onSelectLeg?.(leg.id));
         markersRef.current.push(marker);
+
+        // Insert departure / arrival waypoints from the travel leg AFTER this city
+        if (i < locationLegs.length - 1) {
+          const nextCity = locationLegs[i + 1];
+          const travel = sortedLegs.find(
+            (l) => l.type === 'travel' && l.order > leg.order && l.order < nextCity.order,
+          );
+          if (travel) {
+            if (travel.departure_lat != null && travel.departure_lng != null) {
+              const p = { lat: travel.departure_lat, lng: travel.departure_lng };
+              bounds.extend(p);
+              path.push(p);
+            }
+            if (travel.arrival_lat != null && travel.arrival_lng != null) {
+              const p = { lat: travel.arrival_lat, lng: travel.arrival_lng };
+              bounds.extend(p);
+              path.push(p);
+            }
+          }
+        }
       });
 
       // Connecting polyline in route order

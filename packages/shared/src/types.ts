@@ -60,6 +60,10 @@ export interface Leg {
   lat: number | null;
   lng: number | null;
   place_id: string | null;
+  departure_lat: number | null;
+  departure_lng: number | null;
+  arrival_lat: number | null;
+  arrival_lng: number | null;
   purchased: boolean;
   notes: string | null;
 }

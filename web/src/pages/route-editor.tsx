@@ -472,9 +472,14 @@ function TravelLegCard({
       arrival_time: leg.arrival_time ?? '',
       departure_location: leg.departure_location ?? '',
       arrival_location: leg.arrival_location ?? '',
+      departure_lat: leg.departure_lat ?? null,
+      departure_lng: leg.departure_lng ?? null,
+      arrival_lat: leg.arrival_lat ?? null,
+      arrival_lng: leg.arrival_lng ?? null,
       notes: leg.notes ?? '',
     },
   });
+  const { data: travelConfig } = useConfig();
 
   const transportType = watch('transport_type') as TransportType;
   const Icon = transportIcons[transportType] ?? Plane;
@@ -524,7 +529,7 @@ function TravelLegCard({
             <div className="space-y-3">
               <fieldset disabled={locked} className="contents">
               <BookingDrop
-                onExtracted={(data) => {
+                onExtracted={async (data) => {
                   const opts = { shouldDirty: true, shouldTouch: true } as const;
                   if (data.transport_type) setValue('transport_type', data.transport_type, opts);
                   if (data.cost != null) setValue('cost', data.cost as never, opts);
@@ -538,6 +543,20 @@ function TravelLegCard({
                   if (data.arrival_time) setValue('arrival_time', data.arrival_time, opts);
                   if (data.departure_location) setValue('departure_location', data.departure_location, opts);
                   if (data.arrival_location) setValue('arrival_location', data.arrival_location, opts);
+
+                  // Geocode departure / arrival so the map can route through them
+                  if (travelConfig?.googleMapsApiKey) {
+                    if (data.departure_location) {
+                      const dep = await geocodePlace(travelConfig.googleMapsApiKey, data.departure_location);
+                      if (dep?.lat != null) setValue('departure_lat', dep.lat, opts);
+                      if (dep?.lng != null) setValue('departure_lng', dep.lng, opts);
+                    }
+                    if (data.arrival_location) {
+                      const arr = await geocodePlace(travelConfig.googleMapsApiKey, data.arrival_location);
+                      if (arr?.lat != null) setValue('arrival_lat', arr.lat, opts);
+                      if (arr?.lng != null) setValue('arrival_lng', arr.lng, opts);
+                    }
+                  }
                 }}
               />
               <div className="grid grid-cols-2 gap-3">
