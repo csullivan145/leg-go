@@ -1544,7 +1544,7 @@ export default function RouteEditorPage() {
               (sum, l) => sum + (l.payments ?? []).reduce((s, p) => s + (p.amount ?? 0), 0),
               0,
             );
-            const leftToPay = outOfPocket - totalPaid;
+            const leftToPay = totalCost - totalPaid;
             return (
               <div className="mt-8 py-4 px-5 rounded-xl border border-border/60 bg-card">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Running Totals</h3>
