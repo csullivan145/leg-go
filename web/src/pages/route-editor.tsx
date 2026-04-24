@@ -480,6 +480,23 @@ function TravelLegCard({
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
               <fieldset disabled={locked} className="contents">
+              <BookingDrop
+                onExtracted={(data) => {
+                  const opts = { shouldDirty: true, shouldTouch: true } as const;
+                  if (data.transport_type) setValue('transport_type', data.transport_type, opts);
+                  if (data.cost != null) setValue('cost', data.cost as never, opts);
+                  if (data.duration) setValue('duration', data.duration, opts);
+                  if (data.stops != null) setValue('stops', data.stops as never, opts);
+                  if (data.company) setValue('company', data.company, opts);
+                  if (data.booking_id) setValue('booking_id', data.booking_id, opts);
+                  if (data.start_date) setValue('start_date', data.start_date, opts);
+                  if (data.end_date) setValue('end_date', data.end_date, opts);
+                  if (data.departure_time) setValue('departure_time', data.departure_time, opts);
+                  if (data.arrival_time) setValue('arrival_time', data.arrival_time, opts);
+                  if (data.departure_location) setValue('departure_location', data.departure_location, opts);
+                  if (data.arrival_location) setValue('arrival_location', data.arrival_location, opts);
+                }}
+              />
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Transport Type *</Label>

@@ -11,6 +11,7 @@ const LOADING_MESSAGES = [
 ];
 
 export interface BookingDropResult {
+  // Accommodation
   name?: string | null;
   city?: string | null;
   address?: string | null;
@@ -23,6 +24,18 @@ export interface BookingDropResult {
   booking_id?: string | null;
   booking_link?: string | null;
   nights?: number | null;
+  // Travel
+  transport_type?: 'flight' | 'train' | 'ferry' | 'car' | 'bus' | null;
+  cost?: number | null;
+  duration?: string | null;
+  stops?: number | null;
+  company?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  departure_time?: string | null;
+  arrival_time?: string | null;
+  departure_location?: string | null;
+  arrival_location?: string | null;
 }
 
 interface BookingDropProps {
@@ -67,9 +80,11 @@ export function BookingDrop({ onExtracted, className }: BookingDropProps) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'Request failed' }));
-        throw new Error(body.error || 'Extraction failed');
+        const msg = body.detail ? `${body.error || 'Extraction failed'}: ${body.detail}` : body.error || 'Extraction failed';
+        throw new Error(msg);
       }
       const { data } = (await res.json()) as { data: BookingDropResult };
+      console.log('[BookingDrop] extracted:', data);
       onExtracted(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Extraction failed');
