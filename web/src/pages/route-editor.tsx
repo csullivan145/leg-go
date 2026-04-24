@@ -42,6 +42,7 @@ import { CurrencyConverter } from '@/components/currency-converter';
 import { PlaceAutocomplete } from '@/components/place-autocomplete';
 import { BookingDrop, type BookingDropResult } from '@/components/booking-drop';
 import { RouteMap } from '@/components/route-map';
+import { PaymentsSection } from '@/components/payments-section';
 import {
   useCreateLeg,
   useUpdateLeg,
@@ -63,7 +64,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
-import type { Leg, Accommodation, DayTrip, Activity, TransportType } from '@leg-go/shared';
+import type { Leg, Accommodation, DayTrip, Activity, LegPayment, TransportType } from '@leg-go/shared';
 
 const transportIcons: Record<TransportType, React.ComponentType<{ className?: string }>> = {
   flight: Plane,
@@ -120,6 +121,7 @@ interface LegWithDetails extends Leg {
   accommodation?: Accommodation | null;
   day_trips?: DayTrip[];
   activities?: Activity[];
+  payments?: LegPayment[];
 }
 
 interface RouteDetail {
@@ -474,7 +476,7 @@ function TravelLegCard({
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2">
               {locked && <Lock className="h-3.5 w-3.5 text-primary" />}
-              {locked ? 'Purchased — locked' : 'Edit Travel Leg'}
+              {locked ? 'Booked — locked' : 'Edit Travel Leg'}
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -579,6 +581,13 @@ function TravelLegCard({
                 <Textarea className="text-sm min-h-0 h-16" {...register('notes')} />
               </div>
               </fieldset>
+              <PaymentsSection
+                legId={leg.id}
+                tripId={tripId}
+                routeId={routeId}
+                payments={leg.payments ?? []}
+                totalCost={leg.cost ?? null}
+              />
               <div className="flex gap-2 justify-end items-center flex-wrap">
                 {confirmedMode && (
                   <Button
@@ -609,12 +618,12 @@ function TravelLegCard({
                     {locked ? (
                       <>
                         <LockOpen className="h-3.5 w-3.5 mr-1" />
-                        Unmark purchased
+                        Unmark booked
                       </>
                     ) : (
                       <>
                         <CircleCheck className="h-3.5 w-3.5 mr-1" />
-                        Mark as purchased
+                        Mark as booked
                       </>
                     )}
                   </Button>
@@ -973,6 +982,7 @@ function LocationLegCard({
                   <NotesField register={accForm.register('notes')} hasExistingNote={!!leg.accommodation?.notes} />
                 </div>
               </div>
+              </fieldset>
 
               <Separator className="bg-border/60" />
 
@@ -1068,7 +1078,18 @@ function LocationLegCard({
 
               <Separator className="bg-border/60" />
 
-              </fieldset>
+              <PaymentsSection
+                legId={leg.id}
+                tripId={tripId}
+                routeId={routeId}
+                payments={leg.payments ?? []}
+                totalCost={
+                  leg.accommodation?.total_cost ??
+                  (leg.accommodation?.cost_per_night != null && getLiveNights() > 0
+                    ? +(leg.accommodation.cost_per_night * getLiveNights()).toFixed(2)
+                    : null)
+                }
+              />
               <div className="flex justify-between items-center flex-wrap gap-2">
                 <div className="flex gap-1 items-center">
                   {confirmedMode && (
@@ -1092,12 +1113,12 @@ function LocationLegCard({
                       {locked ? (
                         <>
                           <LockOpen className="h-3.5 w-3.5 mr-1" />
-                          Unmark purchased
+                          Unmark booked
                         </>
                       ) : (
                         <>
                           <CircleCheck className="h-3.5 w-3.5 mr-1" />
-                          Mark as purchased
+                          Mark as booked
                         </>
                       )}
                     </Button>

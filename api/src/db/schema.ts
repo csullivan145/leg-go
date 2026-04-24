@@ -64,6 +64,15 @@ export const legs = sqliteTable('legs', {
   notes: text('notes'),
 });
 
+export const legPayments = sqliteTable('leg_payments', {
+  id: text('id').primaryKey(),
+  leg_id: text('leg_id').notNull().references(() => legs.id, { onDelete: 'cascade' }),
+  amount: real('amount').notNull(),
+  date: text('date').notNull(),
+  note: text('note'),
+  created_at: text('created_at').notNull(),
+});
+
 export const accommodations = sqliteTable('accommodations', {
   id: text('id').primaryKey(),
   leg_id: text('leg_id').notNull().references(() => legs.id, { onDelete: 'cascade' }).unique(),

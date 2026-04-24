@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { eq, and } from 'drizzle-orm';
-import { routes, legs, accommodations, dayTrips, activities, carRentals } from '../db/schema';
+import { routes, legs, accommodations, dayTrips, activities, carRentals, legPayments } from '../db/schema';
 import { createRouteSchema, updateRouteSchema } from '@leg-go/shared';
 import { generateId } from '../lib/utils';
 import { requireTripAccess } from '../middleware/trip-access';
@@ -73,7 +73,8 @@ routeRoutes.get('/:routeId', async (c) => {
 
   const legsWithDetails = await Promise.all(
     legList.map(async (leg) => {
-      if (leg.type !== 'location') return leg;
+      const paymentList = await db.select().from(legPayments).where(eq(legPayments.leg_id, leg.id));
+      if (leg.type !== 'location') return { ...leg, payments: paymentList };
       const [accom, dayTripList, activityList, carRentalList] = await Promise.all([
         db.select().from(accommodations).where(eq(accommodations.leg_id, leg.id)).get(),
         db.select().from(dayTrips).where(eq(dayTrips.leg_id, leg.id)),
@@ -86,6 +87,7 @@ routeRoutes.get('/:routeId', async (c) => {
         day_trips: dayTripList,
         activities: activityList,
         car_rentals: carRentalList,
+        payments: paymentList,
       };
     }),
   );

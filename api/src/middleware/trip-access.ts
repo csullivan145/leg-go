@@ -1,6 +1,6 @@
 import { createMiddleware } from 'hono/factory';
 import { eq, and } from 'drizzle-orm';
-import { trips, tripShares, routes, legs, accommodations, dayTrips, activities, carRentals, tripOffsets } from '../db/schema';
+import { trips, tripShares, routes, legs, accommodations, dayTrips, activities, carRentals, tripOffsets, legPayments } from '../db/schema';
 import type { TripRole } from '@leg-go/shared';
 import type { AppDb } from './db';
 import type { AuthUser } from './auth';
@@ -63,6 +63,14 @@ async function resolveTripId(c: { req: { param: (k: string) => string | undefine
     const cr = await db.select({ leg_id: carRentals.leg_id }).from(carRentals).where(eq(carRentals.id, carRentalId)).get();
     if (!cr) return null;
     return resolveTripFromLeg(db, cr.leg_id);
+  }
+
+  // Resolve from paymentId
+  const paymentId = c.req.param('paymentId');
+  if (paymentId) {
+    const payment = await db.select({ leg_id: legPayments.leg_id }).from(legPayments).where(eq(legPayments.id, paymentId)).get();
+    if (!payment) return null;
+    return resolveTripFromLeg(db, payment.leg_id);
   }
 
   // Resolve from offsetId

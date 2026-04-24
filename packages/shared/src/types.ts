@@ -92,6 +92,15 @@ export interface DayTrip {
   notes: string | null;
 }
 
+export interface LegPayment {
+  id: string;
+  leg_id: string;
+  amount: number;
+  date: string;
+  note: string | null;
+  created_at: string;
+}
+
 export interface Activity {
   id: string;
   leg_id: string;

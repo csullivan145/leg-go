@@ -67,6 +67,12 @@ export const upsertAccommodationSchema = z.object({
   notes: z.string().max(2000).nullable().optional(),
 });
 
+export const createLegPaymentSchema = z.object({
+  amount: z.number(),
+  date: z.string(),
+  note: z.string().max(500).nullable().optional(),
+});
+
 export const createDayTripSchema = z.object({
   date: z.string(),
   destination_name: z.string().min(1).max(200),

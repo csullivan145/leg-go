@@ -18,6 +18,7 @@ import budgetRoutes from './routes/budget';
 import calendarRoutes from './routes/calendar';
 import compareRoutes from './routes/compare';
 import parseRoutes from './routes/parse';
+import paymentRoutes from './routes/payments';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -45,6 +46,9 @@ app.get('/api/config', (c) => c.json({ googleMapsApiKey: c.env.GOOGLE_MAPS_API_K
 
 // LLM-powered booking extraction
 app.route('/api', parseRoutes);
+
+// Payments (deposits / installments) attached to legs
+app.route('/api', paymentRoutes);
 
 app.route('/api/trips', tripRoutes);
 
