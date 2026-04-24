@@ -135,8 +135,12 @@ legRoutes.patch('/legs/:legId', requireTripAccess('editor'), async (c) => {
       if (!as && !bs) return a.originalIdx - b.originalIdx;
       if (!as) return 1;
       if (!bs) return -1;
-      if (as === bs) return a.originalIdx - b.originalIdx;
-      return as.localeCompare(bs);
+      if (as !== bs) return as.localeCompare(bs);
+      // Same-day tie: travel legs come before location legs
+      // (a flight on the first day of a stay happens *before* the stay begins).
+      if (a.leg.type === 'travel' && b.leg.type === 'location') return -1;
+      if (a.leg.type === 'location' && b.leg.type === 'travel') return 1;
+      return a.originalIdx - b.originalIdx;
     });
 
     for (let i = 0; i < indexed.length; i++) {
