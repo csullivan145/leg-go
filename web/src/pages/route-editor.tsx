@@ -1540,6 +1540,11 @@ export default function RouteEditorPage() {
           {legs.length > 0 && (() => {
             const totalOffset = (offsets ?? []).reduce((sum, o) => sum + o.amount, 0);
             const outOfPocket = totalCost - totalOffset;
+            const totalPaid = legs.reduce(
+              (sum, l) => sum + (l.payments ?? []).reduce((s, p) => s + (p.amount ?? 0), 0),
+              0,
+            );
+            const leftToPay = outOfPocket - totalPaid;
             return (
               <div className="mt-8 py-4 px-5 rounded-xl border border-border/60 bg-card">
                 <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Running Totals</h3>
@@ -1567,6 +1572,21 @@ export default function RouteEditorPage() {
                     <div>
                       <p className="text-muted-foreground text-xs">Out of Pocket</p>
                       <p className="font-bold text-lg tabular-nums">${outOfPocket.toLocaleString()}</p>
+                    </div>
+                  </div>
+                )}
+                {totalPaid > 0 && (
+                  <div className="grid grid-cols-3 gap-4 text-sm mt-3 pt-3 border-t border-border/60">
+                    <div>
+                      <p className="text-muted-foreground text-xs">Paid so far</p>
+                      <p className="font-bold tabular-nums">${totalPaid.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                    </div>
+                    <div />
+                    <div>
+                      <p className="text-muted-foreground text-xs">Left to pay</p>
+                      <p className={'font-bold text-lg tabular-nums ' + (leftToPay <= 0 ? 'text-green-700' : '')}>
+                        ${leftToPay.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                      </p>
                     </div>
                   </div>
                 )}
