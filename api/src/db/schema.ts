@@ -60,6 +60,7 @@ export const legs = sqliteTable('legs', {
   lat: real('lat'),
   lng: real('lng'),
   place_id: text('place_id'),
+  purchased: integer('purchased', { mode: 'boolean' }).notNull().default(false),
   notes: text('notes'),
 });
 

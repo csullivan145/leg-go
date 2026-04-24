@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, Navigate, useParams } from 'react-router';
 import { ArrowLeft, Plus, Trophy, ArrowRight, Plane, Train, Ship, Car, Bus, Trash2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { Button } from '@/components/ui/button';
@@ -185,23 +185,26 @@ function CompareTab({ tripId }: { tripId: string }) {
         <thead>
           <tr>
             <th className="text-left py-3 pr-4 font-medium text-muted-foreground text-xs uppercase tracking-wide w-40">Route</th>
-            {routes.map((r) => (
-              <th key={r.route_id} className="text-center py-3 px-3 font-semibold">
-                <div>{r.route_name}</div>
-                {r.route_id && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="mt-1.5 h-7 text-xs"
-                    onClick={() => pickWinner.mutate(r.route_id)}
-                    disabled={pickWinner.isPending}
-                  >
-                    <Trophy className="h-3 w-3 mr-1" />
-                    Pick Winner
-                  </Button>
-                )}
-              </th>
-            ))}
+            {routes.map((r) => {
+              const isWinner = r.route_status === 'winner';
+              return (
+                <th key={r.route_id} className="text-center py-3 px-3 font-semibold">
+                  <div>{r.route_name}</div>
+                  {r.route_id && (
+                    <Button
+                      size="sm"
+                      variant={isWinner ? 'default' : 'outline'}
+                      className="mt-1.5 h-7 text-xs"
+                      onClick={() => !isWinner && pickWinner.mutate(r.route_id)}
+                      disabled={pickWinner.isPending || isWinner}
+                    >
+                      <Trophy className="h-3 w-3 mr-1" />
+                      {isWinner ? 'Winner' : 'Pick Winner'}
+                    </Button>
+                  )}
+                </th>
+              );
+            })}
           </tr>
         </thead>
         <tbody>
@@ -262,6 +265,13 @@ export default function RoutePlannerPage() {
     setOpen(false);
     form.reset();
   };
+
+  // If there's a confirmed winner, jump straight into its editor — the
+  // "Routes Planned / Compare" view only shows while still deciding.
+  const winner = (routes ?? []).find((r) => r.status === 'winner');
+  if (winner && !isLoading) {
+    return <Navigate to={`/trips/${tripId}/routes/${winner.id}`} replace />;
+  }
 
   return (
     <div>

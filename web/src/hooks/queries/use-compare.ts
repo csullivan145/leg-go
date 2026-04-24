@@ -5,6 +5,7 @@ import { routeKeys } from './use-routes';
 export interface RouteCompareRow {
   route_id: string;
   route_name: string;
+  route_status: string;
   flights_from_home: number;
   in_region_transport: number;
   car_rental: number;
@@ -36,6 +37,7 @@ export function useCompare(tripId: string) {
         routes: res.comparison.map((c) => ({
           route_id: c.route.id,
           route_name: c.route.name,
+          route_status: c.route.status,
           flights_from_home: c.costs.flights,
           in_region_transport: c.costs.ferries + c.costs.trains + c.costs.otherTransport,
           car_rental: c.costs.carRental,

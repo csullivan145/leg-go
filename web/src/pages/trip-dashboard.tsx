@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { Map, Calendar, DollarSign, Users, ArrowLeft, ArrowRight, Trash2 } from 'lucide-react';
+import { Map, Calendar, DollarSign, Users, ArrowLeft, ArrowRight, Trash2, Trophy } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTrip, useDeleteTrip } from '@/hooks/queries/use-trips';
+import { useRoutes } from '@/hooks/queries/use-routes';
 import { cn } from '@/lib/utils';
 
 const statusStyles: Record<string, string> = {
@@ -14,13 +15,7 @@ const statusStyles: Record<string, string> = {
   completed: 'bg-muted text-muted-foreground',
 };
 
-const navItems = [
-  {
-    title: 'Route Planner',
-    description: 'Create and compare alternative routes',
-    icon: Map,
-    href: 'routes',
-  },
+const otherNavItems = [
   {
     title: 'Calendar',
     description: 'Week-by-week travel companion view',
@@ -44,9 +39,26 @@ const navItems = [
 export default function TripDashboardPage() {
   const { tripId } = useParams<{ tripId: string }>();
   const { data: trip, isLoading } = useTrip(tripId!);
+  const { data: routes } = useRoutes(tripId!);
   const deleteTrip = useDeleteTrip();
   const navigate = useNavigate();
   const [deleteOpen, setDeleteOpen] = useState(false);
+
+  const winner = (routes ?? []).find((r) => r.status === 'winner');
+  const routeNavItem = winner
+    ? {
+        title: 'Current Route',
+        description: winner.name,
+        icon: Trophy,
+        href: `routes/${winner.id}`,
+      }
+    : {
+        title: 'Route Planner',
+        description: 'Create and compare alternative routes',
+        icon: Map,
+        href: 'routes',
+      };
+  const navItems = [routeNavItem, ...otherNavItems];
 
   if (isLoading) {
     return (

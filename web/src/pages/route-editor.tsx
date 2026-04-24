@@ -17,6 +17,10 @@ import {
   Copy,
   AlertTriangle,
   Map,
+  Trophy,
+  Lock,
+  LockOpen,
+  CircleCheck,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { format, parseISO, differenceInDays } from 'date-fns';
@@ -30,7 +34,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DatePicker } from '@/components/ui/date-picker';
-import { useRoute, useRoutes, useDeleteRoute } from '@/hooks/queries/use-routes';
+import { useRoute, useRoutes, useDeleteRoute, useUpdateRoute } from '@/hooks/queries/use-routes';
 import { useOffsets } from '@/hooks/queries/use-offsets';
 import { useTrip } from '@/hooks/queries/use-trips';
 import { RouteTimeline } from '@/components/route-timeline';
@@ -397,16 +401,19 @@ function TravelLegCard({
   routeId,
   index,
   otherRoutes,
+  confirmedMode = false,
 }: {
   leg: LegWithDetails;
   tripId: string;
   routeId: string;
   index: number;
   otherRoutes: { id: string; name: string }[];
+  confirmedMode?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const updateLeg = useUpdateLeg(tripId, routeId);
   const deleteLeg = useDeleteLeg(tripId, routeId);
+  const locked = confirmedMode && leg.purchased;
 
   const { register, handleSubmit, setValue, watch } = useForm({
     defaultValues: {
@@ -446,9 +453,11 @@ function TravelLegCard({
       <div
         className={cn(
           'flex items-center gap-2 px-3 py-1.5 rounded-full border cursor-pointer text-sm transition-all',
-          leg.transport_type
-            ? 'bg-card border-border/60 hover:border-primary/30'
-            : 'border-dashed border-muted-foreground/30 bg-muted/20 hover:bg-muted/40',
+          locked
+            ? 'bg-primary/10 border-primary/40 text-foreground'
+            : leg.transport_type
+              ? 'bg-card border-border/60 hover:border-primary/30'
+              : 'border-dashed border-muted-foreground/30 bg-muted/20 hover:bg-muted/40',
         )}
         onClick={() => setExpanded(!expanded)}
       >
@@ -456,16 +465,21 @@ function TravelLegCard({
         <span className="font-medium">{leg.transport_type ? transportLabels[leg.transport_type] : 'Travel'}</span>
         {leg.cost != null && <span className="text-muted-foreground tabular-nums">${leg.cost.toLocaleString()}</span>}
         {leg.duration && <span className="text-muted-foreground">· {leg.duration}</span>}
+        {locked && <Lock className="h-3 w-3 text-primary" />}
         {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
       </div>
 
       {expanded && (
         <Card className="absolute top-full mt-2 z-10 w-full max-w-lg shadow-lg border-border/60">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm">Edit Travel Leg</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2">
+              {locked && <Lock className="h-3.5 w-3.5 text-primary" />}
+              {locked ? 'Purchased — locked' : 'Edit Travel Leg'}
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+              <fieldset disabled={locked} className="contents">
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-xs">Transport Type *</Label>
@@ -547,23 +561,52 @@ function TravelLegCard({
                 <Label className="text-xs">Notes</Label>
                 <Textarea className="text-sm min-h-0 h-16" {...register('notes')} />
               </div>
-              <div className="flex gap-2 justify-end">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-destructive"
-                  onClick={() => deleteLeg.mutate(leg.id)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-                <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
+              </fieldset>
+              <div className="flex gap-2 justify-end items-center flex-wrap">
+                {confirmedMode && (
+                  <Button
+                    type="button"
+                    variant={locked ? 'outline' : 'secondary'}
+                    size="sm"
+                    onClick={async () => {
+                      await updateLeg.mutateAsync({ legId: leg.id, purchased: !leg.purchased } as never);
+                    }}
+                    disabled={updateLeg.isPending}
+                    className="mr-auto"
+                  >
+                    {locked ? (
+                      <>
+                        <LockOpen className="h-3.5 w-3.5 mr-1" />
+                        Unmark purchased
+                      </>
+                    ) : (
+                      <>
+                        <CircleCheck className="h-3.5 w-3.5 mr-1" />
+                        Mark as purchased
+                      </>
+                    )}
+                  </Button>
+                )}
+                {!locked && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive"
+                    onClick={() => deleteLeg.mutate(leg.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+                {!locked && <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />}
                 <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(false)}>
-                  Cancel
+                  {locked ? 'Close' : 'Cancel'}
                 </Button>
-                <Button type="submit" size="sm" disabled={updateLeg.isPending}>
-                  Save
-                </Button>
+                {!locked && (
+                  <Button type="submit" size="sm" disabled={updateLeg.isPending}>
+                    Save
+                  </Button>
+                )}
               </div>
             </form>
           </CardContent>
@@ -580,6 +623,7 @@ function LocationLegCard({
   index,
   defaultExpanded = false,
   otherRoutes,
+  confirmedMode = false,
 }: {
   leg: LegWithDetails;
   tripId: string;
@@ -587,10 +631,12 @@ function LocationLegCard({
   index: number;
   defaultExpanded?: boolean;
   otherRoutes: { id: string; name: string }[];
+  confirmedMode?: boolean;
 }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const updateLeg = useUpdateLeg(tripId, routeId);
   const deleteLeg = useDeleteLeg(tripId, routeId);
+  const locked = confirmedMode && leg.purchased;
   const upsertAccommodation = useUpsertAccommodation(tripId, routeId);
   const createDayTrip = useCreateDayTrip(tripId, routeId);
   const deleteDayTrip = useDeleteDayTrip(tripId, routeId);
@@ -681,7 +727,10 @@ function LocationLegCard({
           </div>
           <div className="w-px bg-border/60 flex-1 min-h-4" />
         </div>
-        <div className="flex-1 py-3 px-4 rounded-xl border border-border/60 bg-card">
+        <div className={cn(
+          'flex-1 py-3 px-4 rounded-xl border bg-card',
+          locked ? 'border-primary/40 bg-primary/5' : 'border-border/60',
+        )}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1 min-w-0">
               {expanded ? (
@@ -721,7 +770,10 @@ function LocationLegCard({
                 </>
               ) : (
                 <>
-                  <h3 className="text-base font-semibold">{leg.name || 'Unnamed Location'}</h3>
+                  <h3 className="text-base font-semibold flex items-center gap-2">
+                    {leg.name || 'Unnamed Location'}
+                    {locked && <Lock className="h-3.5 w-3.5 text-primary" />}
+                  </h3>
                   {leg.start_date && leg.end_date && (
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {format(parseISO(leg.start_date), 'MMM d')} –{' '}
@@ -759,6 +811,7 @@ function LocationLegCard({
 
           {expanded && (
             <div className="pt-3 space-y-4">
+              <fieldset disabled={locked} className="contents">
               <NotesField register={legForm.register('notes')} hasExistingNote={!!leg.notes} />
 
               <Separator className="bg-border/60" />
@@ -983,32 +1036,62 @@ function LocationLegCard({
 
               <Separator className="bg-border/60" />
 
-              <div className="flex justify-between items-center">
-                <div className="flex gap-1">
+              </fieldset>
+              <div className="flex justify-between items-center flex-wrap gap-2">
+                <div className="flex gap-1 items-center">
+                  {confirmedMode && (
+                    <Button
+                      type="button"
+                      variant={locked ? 'outline' : 'secondary'}
+                      size="sm"
+                      onClick={async () => {
+                        await updateLeg.mutateAsync({ legId: leg.id, purchased: !leg.purchased } as never);
+                      }}
+                      disabled={updateLeg.isPending}
+                    >
+                      {locked ? (
+                        <>
+                          <LockOpen className="h-3.5 w-3.5 mr-1" />
+                          Unmark purchased
+                        </>
+                      ) : (
+                        <>
+                          <CircleCheck className="h-3.5 w-3.5 mr-1" />
+                          Mark as purchased
+                        </>
+                      )}
+                    </Button>
+                  )}
+                  {!locked && (
+                    <>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive"
+                        onClick={() => deleteLeg.mutate(leg.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5 mr-1" />
+                        Remove
+                      </Button>
+                      <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
+                    </>
+                  )}
+                </div>
+                {!locked && (
                   <Button
                     type="button"
-                    variant="ghost"
                     size="sm"
-                    className="text-destructive"
-                    onClick={() => deleteLeg.mutate(leg.id)}
+                    disabled={updateLeg.isPending || upsertAccommodation.isPending}
+                    onClick={async () => {
+                      await legForm.handleSubmit(onSaveLeg)();
+                      await accForm.handleSubmit(onSaveAccommodation)();
+                      setExpanded(false);
+                    }}
                   >
-                    <Trash2 className="h-3.5 w-3.5 mr-1" />
-                    Remove
+                    {updateLeg.isPending || upsertAccommodation.isPending ? 'Saving…' : 'Save'}
                   </Button>
-                  <CopyToRouteMenu legId={leg.id} tripId={tripId} routeId={routeId} otherRoutes={otherRoutes} />
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  disabled={updateLeg.isPending || upsertAccommodation.isPending}
-                  onClick={async () => {
-                    await legForm.handleSubmit(onSaveLeg)();
-                    await accForm.handleSubmit(onSaveAccommodation)();
-                    setExpanded(false);
-                  }}
-                >
-                  {updateLeg.isPending || upsertAccommodation.isPending ? 'Saving…' : 'Save'}
-                </Button>
+                )}
               </div>
             </div>
           )}
@@ -1028,6 +1111,7 @@ export default function RouteEditorPage() {
   const updateLeg = useUpdateLeg(tripId!, routeId!);
   const updateDayTrip = useUpdateDayTrip(tripId!, routeId!);
   const deleteRoute = useDeleteRoute(tripId!);
+  const updateRoute = useUpdateRoute(tripId!);
   const navigate = useNavigate();
   const otherRoutes = (allRoutes ?? []).filter((r: { id: string }) => r.id !== routeId).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name }));
   const [viewMode, setViewMode] = useState<'list' | 'timeline' | 'map'>('list');
@@ -1071,13 +1155,30 @@ export default function RouteEditorPage() {
     <div>
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground hover:text-foreground">
-            <Link to={`/trips/${tripId}/routes`}>
-              <ArrowLeft className="h-4 w-4 mr-1" />
-              Routes
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight">{route.name}</h1>
+          {route.status === 'winner' ? (
+            <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground hover:text-foreground">
+              <Link to={`/trips/${tripId}`}>
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Trip
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="ghost" size="sm" asChild className="-ml-2 text-muted-foreground hover:text-foreground">
+              <Link to={`/trips/${tripId}/routes`}>
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Routes
+              </Link>
+            </Button>
+          )}
+          <div>
+            {route.status === 'winner' && (
+              <div className="flex items-center gap-1.5 text-xs uppercase tracking-wide text-primary font-semibold">
+                <Trophy className="h-3 w-3" />
+                Current Route
+              </div>
+            )}
+            <h1 className="text-2xl font-bold tracking-tight">{route.name}</h1>
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-0.5 border border-border/60 rounded-lg p-0.5">
@@ -1106,6 +1207,19 @@ export default function RouteEditorPage() {
               <Map className="h-4 w-4" />
             </Button>
           </div>
+          {route.status === 'winner' && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 text-xs"
+              onClick={() =>
+                updateRoute.mutate({ routeId: route.id, status: 'draft' as never })
+              }
+              disabled={updateRoute.isPending}
+            >
+              Cancel confirmation
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="sm"
@@ -1249,7 +1363,15 @@ export default function RouteEditorPage() {
 
                   if (leg.type === 'travel') {
                     elements.push(
-                      <TravelLegCard key={leg.id} leg={leg} tripId={tripId!} routeId={routeId!} index={i} otherRoutes={otherRoutes} />,
+                      <TravelLegCard
+                        key={leg.id}
+                        leg={leg}
+                        tripId={tripId!}
+                        routeId={routeId!}
+                        index={i}
+                        otherRoutes={otherRoutes}
+                        confirmedMode={route.status === 'winner'}
+                      />,
                     );
                   } else {
                     elements.push(
@@ -1261,6 +1383,7 @@ export default function RouteEditorPage() {
                         index={locationIndex++}
                         defaultExpanded={leg.id === newlyCreatedLegId}
                         otherRoutes={otherRoutes}
+                        confirmedMode={route.status === 'winner'}
                       />,
                     );
                     prevLocation = leg;

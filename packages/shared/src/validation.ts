@@ -47,6 +47,7 @@ export const createLegSchema = z.object({
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
   place_id: z.string().max(200).nullable().optional(),
+  purchased: z.boolean().optional(),
 });
 
 export const updateLegSchema = createLegSchema.partial().omit({ type: true });
