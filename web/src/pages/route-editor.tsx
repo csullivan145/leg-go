@@ -41,6 +41,8 @@ import { RouteTimeline } from '@/components/route-timeline';
 import { CurrencyConverter } from '@/components/currency-converter';
 import { PlaceAutocomplete } from '@/components/place-autocomplete';
 import { BookingDrop, type BookingDropResult } from '@/components/booking-drop';
+import { useConfig } from '@/hooks/queries/use-config';
+import { geocodePlace } from '@/lib/geocode-place';
 import { RouteMap } from '@/components/route-map';
 import { PaymentsSection } from '@/components/payments-section';
 import {
@@ -727,6 +729,7 @@ function LocationLegCard({
   const deleteDayTrip = useDeleteDayTrip(tripId, routeId);
   const createActivity = useCreateActivity(tripId, routeId);
   const deleteActivity = useDeleteActivity(tripId, routeId);
+  const { data: appConfig } = useConfig();
 
   const legForm = useForm({
     defaultValues: {
@@ -906,7 +909,7 @@ function LocationLegCard({
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Accommodation</h4>
                 <div className="space-y-3">
                   <BookingDrop
-                    onExtracted={(data: BookingDropResult) => {
+                    onExtracted={async (data: BookingDropResult) => {
                       if (data.city) legForm.setValue('name', data.city, { shouldDirty: true });
                       if (data.name) accForm.setValue('name', data.name, { shouldDirty: true });
                       if (data.address) accForm.setValue('address', data.address, { shouldDirty: true });
@@ -916,6 +919,30 @@ function LocationLegCard({
                       if (data.cost_per_night != null) accForm.setValue('cost_per_night', data.cost_per_night as never, { shouldDirty: true });
                       if (data.check_in_date) legForm.setValue('start_date', data.check_in_date, { shouldDirty: true });
                       if (data.check_out_date) legForm.setValue('end_date', data.check_out_date, { shouldDirty: true });
+
+                      if (!appConfig?.googleMapsApiKey) return;
+
+                      // Resolve accommodation to coordinates so its pin shows on the map
+                      const hotelQuery = [data.name, data.address, data.city].filter(Boolean).join(', ');
+                      if (hotelQuery) {
+                        const resolved = await geocodePlace(appConfig.googleMapsApiKey, hotelQuery);
+                        if (resolved) {
+                          if (resolved.lat != null) accForm.setValue('lat', resolved.lat, { shouldDirty: true });
+                          if (resolved.lng != null) accForm.setValue('lng', resolved.lng, { shouldDirty: true });
+                          if (resolved.place_id) accForm.setValue('place_id', resolved.place_id, { shouldDirty: true });
+                        }
+                      }
+
+                      // Resolve the city so the location leg pins on the map too
+                      const cityQuery = data.city ?? null;
+                      if (cityQuery && (leg.lat == null || leg.lng == null)) {
+                        const city = await geocodePlace(appConfig.googleMapsApiKey, cityQuery);
+                        if (city) {
+                          if (city.lat != null) legForm.setValue('lat', city.lat, { shouldDirty: true });
+                          if (city.lng != null) legForm.setValue('lng', city.lng, { shouldDirty: true });
+                          if (city.place_id) legForm.setValue('place_id', city.place_id, { shouldDirty: true });
+                        }
+                      }
                     }}
                   />
                   <div className="grid grid-cols-2 gap-3">

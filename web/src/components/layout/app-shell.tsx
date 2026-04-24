@@ -9,7 +9,7 @@ export function AppShell() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       <header className="border-b border-border/60 bg-background/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2.5 group">
             <span className="text-xl font-bold tracking-tight text-foreground">
               Leg<span className="text-primary">·</span>go
@@ -25,7 +25,7 @@ export function AppShell() {
         </div>
       </header>
       <main className="flex-1">
-        <div className="max-w-5xl mx-auto px-4 py-8">
+        <div className="max-w-7xl mx-auto px-4 py-8">
           <Outlet />
         </div>
       </main>

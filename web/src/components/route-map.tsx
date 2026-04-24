@@ -203,5 +203,5 @@ export function RouteMap({ legs, onSelectLeg }: RouteMapProps) {
     );
   }
 
-  return <div ref={containerRef} className="h-[480px] rounded-xl border border-border/60 overflow-hidden" />;
+  return <div ref={containerRef} className="h-[960px] rounded-xl border border-border/60 overflow-hidden" />;
 }
