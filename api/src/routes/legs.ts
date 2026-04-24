@@ -117,57 +117,33 @@ legRoutes.patch('/legs/:legId', requireTripAccess('editor'), async (c) => {
 
   await db.update(legs).set({ ...body, nights }).where(eq(legs.id, legId));
 
-  // Auto-reorder: if a location's start_date changed, resort location legs by
-  // date. Travel legs stay attached to the location immediately after them
-  // (the "Home -> X" or "X -> Y" they represent), and trailing travel after
-  // the last location stays at the end.
-  if (leg.type === 'location' && body.start_date !== undefined) {
+  // Auto-reorder: if any leg's start_date changed (location or travel),
+  // resort all legs chronologically by start_date. Stable for ties and for
+  // legs with no date (they keep their relative position).
+  if (body.start_date !== undefined) {
     const allLegs = await db
       .select()
       .from(legs)
       .where(eq(legs.route_id, leg.route_id));
+    // Seed with stable relative order
     allLegs.sort((a, b) => a.order - b.order);
 
-    type Block = { travelBefore: typeof allLegs; location: (typeof allLegs)[number] };
-    const blocks: Block[] = [];
-    let pendingTravel: typeof allLegs = [];
-    for (const l of allLegs) {
-      if (l.type === 'travel') {
-        pendingTravel.push(l);
-      } else {
-        blocks.push({ travelBefore: pendingTravel, location: l });
-        pendingTravel = [];
-      }
-    }
-    const trailingTravel = pendingTravel;
-
-    blocks.sort((a, b) => {
-      const as = a.location.start_date;
-      const bs = b.location.start_date;
-      if (!as && !bs) return 0;
+    const indexed = allLegs.map((l, idx) => ({ leg: l, originalIdx: idx }));
+    indexed.sort((a, b) => {
+      const as = a.leg.start_date;
+      const bs = b.leg.start_date;
+      if (!as && !bs) return a.originalIdx - b.originalIdx;
       if (!as) return 1;
       if (!bs) return -1;
+      if (as === bs) return a.originalIdx - b.originalIdx;
       return as.localeCompare(bs);
     });
 
-    let nextOrder = 0;
-    for (const block of blocks) {
-      for (const t of block.travelBefore) {
-        if (t.order !== nextOrder) {
-          await db.update(legs).set({ order: nextOrder }).where(eq(legs.id, t.id));
-        }
-        nextOrder++;
+    for (let i = 0; i < indexed.length; i++) {
+      const l = indexed[i].leg;
+      if (l.order !== i) {
+        await db.update(legs).set({ order: i }).where(eq(legs.id, l.id));
       }
-      if (block.location.order !== nextOrder) {
-        await db.update(legs).set({ order: nextOrder }).where(eq(legs.id, block.location.id));
-      }
-      nextOrder++;
-    }
-    for (const t of trailingTravel) {
-      if (t.order !== nextOrder) {
-        await db.update(legs).set({ order: nextOrder }).where(eq(legs.id, t.id));
-      }
-      nextOrder++;
     }
   }
 

@@ -631,6 +631,14 @@ function LocationLegCard({
 
   const dayTripForm = useForm({ defaultValues: { destination_name: '', date: '', status: 'idea' as const } });
   const activityForm = useForm({ defaultValues: { name: '', date: '' } });
+  // Live nights count based on current form values (not the saved leg),
+  // so cost-per-night <-> total auto-sync works on an unsaved location.
+  const getLiveNights = () =>
+    getNights({
+      nights: leg.nights,
+      start_date: legForm.getValues('start_date') || leg.start_date || null,
+      end_date: legForm.getValues('end_date') || leg.end_date || null,
+    });
   const [addingDayTrip, setAddingDayTrip] = useState(false);
   const [addingActivity, setAddingActivity] = useState(false);
 
@@ -806,7 +814,7 @@ function LocationLegCard({
                           {...accForm.register('cost_per_night', {
                             valueAsNumber: true,
                             onChange: (e) => {
-                              const nights = getNights(leg);
+                              const nights = getLiveNights();
                               const val = parseFloat(e.target.value);
                               if (nights > 0 && !isNaN(val)) {
                                 accForm.setValue('total_cost', +(val * nights).toFixed(2), { shouldDirty: true });
@@ -817,7 +825,7 @@ function LocationLegCard({
                         <CurrencyConverter
                           onConvert={(usd) => {
                             accForm.setValue('cost_per_night', usd, { shouldDirty: true });
-                            const nights = getNights(leg);
+                            const nights = getLiveNights();
                             if (nights > 0) {
                               accForm.setValue('total_cost', +(usd * nights).toFixed(2), { shouldDirty: true });
                             }
@@ -835,7 +843,7 @@ function LocationLegCard({
                           {...accForm.register('total_cost', {
                             valueAsNumber: true,
                             onChange: (e) => {
-                              const nights = getNights(leg);
+                              const nights = getLiveNights();
                               const val = parseFloat(e.target.value);
                               if (nights > 0 && !isNaN(val)) {
                                 accForm.setValue('cost_per_night', +(val / nights).toFixed(2), { shouldDirty: true });
@@ -846,7 +854,7 @@ function LocationLegCard({
                         <CurrencyConverter
                           onConvert={(usd) => {
                             accForm.setValue('total_cost', usd, { shouldDirty: true });
-                            const nights = getNights(leg);
+                            const nights = getLiveNights();
                             if (nights > 0) {
                               accForm.setValue('cost_per_night', +(usd / nights).toFixed(2), { shouldDirty: true });
                             }
