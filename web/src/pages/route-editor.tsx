@@ -586,7 +586,22 @@ function TravelLegCard({
                     variant={locked ? 'outline' : 'secondary'}
                     size="sm"
                     onClick={async () => {
-                      await updateLeg.mutateAsync({ legId: leg.id, purchased: !leg.purchased } as never);
+                      if (leg.purchased) {
+                        await updateLeg.mutateAsync({ legId: leg.id, purchased: false } as never);
+                      } else {
+                        await handleSubmit(async (values) => {
+                          await updateLeg.mutateAsync({
+                            legId: leg.id,
+                            ...values,
+                            cost: values.cost ? Number(values.cost) : null,
+                            stops: values.stops ? Number(values.stops) : null,
+                            start_date: values.start_date || null,
+                            end_date: values.end_date || null,
+                            purchased: true,
+                          } as never);
+                        })();
+                        setExpanded(false);
+                      }
                     }}
                     disabled={updateLeg.isPending}
                     className="mr-auto"
@@ -1062,9 +1077,17 @@ function LocationLegCard({
                       variant={locked ? 'outline' : 'secondary'}
                       size="sm"
                       onClick={async () => {
-                        await updateLeg.mutateAsync({ legId: leg.id, purchased: !leg.purchased } as never);
+                        if (leg.purchased) {
+                          await updateLeg.mutateAsync({ legId: leg.id, purchased: false } as never);
+                        } else {
+                          await legForm.handleSubmit(async (values) => {
+                            await updateLeg.mutateAsync({ legId: leg.id, ...values, purchased: true } as never);
+                          })();
+                          await accForm.handleSubmit(onSaveAccommodation)();
+                          setExpanded(false);
+                        }
                       }}
-                      disabled={updateLeg.isPending}
+                      disabled={updateLeg.isPending || upsertAccommodation.isPending}
                     >
                       {locked ? (
                         <>
