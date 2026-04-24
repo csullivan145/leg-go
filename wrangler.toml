@@ -17,8 +17,8 @@ migrations_dir = "api/drizzle/migrations"
 # binding = "RECEIPTS"
 # bucket_name = "leg-go-files"
 
-# [ai]
-# binding = "AI"
+[ai]
+binding = "AI"
 
 [vars]
 FRONTEND_URL = "https://leg-go.csullivan.workers.dev"

@@ -36,6 +36,7 @@ import { useTrip } from '@/hooks/queries/use-trips';
 import { RouteTimeline } from '@/components/route-timeline';
 import { CurrencyConverter } from '@/components/currency-converter';
 import { PlaceAutocomplete } from '@/components/place-autocomplete';
+import { BookingDrop, type BookingDropResult } from '@/components/booking-drop';
 import { RouteMap } from '@/components/route-map';
 import {
   useCreateLeg,
@@ -758,6 +759,18 @@ function LocationLegCard({
               <div>
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Accommodation</h4>
                 <div className="space-y-3">
+                  <BookingDrop
+                    onExtracted={(data: BookingDropResult) => {
+                      if (data.name) accForm.setValue('name', data.name, { shouldDirty: true });
+                      if (data.address) accForm.setValue('address', data.address, { shouldDirty: true });
+                      if (data.check_in_time) accForm.setValue('check_in_time', data.check_in_time, { shouldDirty: true });
+                      if (data.check_out_time) accForm.setValue('check_out_time', data.check_out_time, { shouldDirty: true });
+                      if (data.total_cost != null) accForm.setValue('total_cost', data.total_cost as never, { shouldDirty: true });
+                      if (data.cost_per_night != null) accForm.setValue('cost_per_night', data.cost_per_night as never, { shouldDirty: true });
+                      if (data.check_in_date) legForm.setValue('start_date', data.check_in_date, { shouldDirty: true });
+                      if (data.check_out_date) legForm.setValue('end_date', data.check_out_date, { shouldDirty: true });
+                    }}
+                  />
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <Label className="text-xs">Name</Label>

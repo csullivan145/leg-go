@@ -17,6 +17,7 @@ import shareRoutes from './routes/shares';
 import budgetRoutes from './routes/budget';
 import calendarRoutes from './routes/calendar';
 import compareRoutes from './routes/compare';
+import parseRoutes from './routes/parse';
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -41,6 +42,9 @@ app.use('/api/*', authMiddleware);
 
 // Client-exposable config (API keys safe for browser use, e.g. referrer-restricted)
 app.get('/api/config', (c) => c.json({ googleMapsApiKey: c.env.GOOGLE_MAPS_API_KEY ?? null }));
+
+// LLM-powered booking extraction
+app.route('/api', parseRoutes);
 
 app.route('/api/trips', tripRoutes);
 
